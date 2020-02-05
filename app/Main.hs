@@ -5,7 +5,9 @@ import System.IO
 
 main :: IO ()
 main = do
-    handle <- openFile "test-data/SomeClass.cs" ReadMode  
+    handle <- openFile "test-data/SomeCSV.csv" ReadMode  
     contents <- hGetContents handle
-    putStr (training contents)
+    case parseCSV contents of
+        Left err -> print err
+        Right r -> print r
     hClose handle 

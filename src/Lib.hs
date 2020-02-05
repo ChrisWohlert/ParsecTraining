@@ -1,8 +1,11 @@
 module Lib
     ( parseCSV
+    , run_parseClass
     ) where
         
 import Text.ParserCombinators.Parsec
+import qualified Class as C
+import System.IO
 
 {- A CSV file contains 0 or more lines, each of which is terminated
    by the end-of-line character (eol). -}
@@ -61,10 +64,39 @@ usings = many using
 
 using :: GenParser Char st String
 using = do
-    u <- string "Using"
+    u <- string "using"
     s <- space
     r <- manyTill anyChar (char '\n')
     return $ u ++ [s] ++ r
 
 namespace :: GenParser Char st String
-namespace = string "namespace" >> space >> manyTill anyChar (char '\n')
+namespace = string "namespace" >> space >> manyTill anyChar ((char '\n') <|> space <|> char '{')
+
+curlyStart :: GenParser Char st String
+curlyStart = char '{' >> many newline
+
+parseVisibility :: GenParser Char st C.Visibility
+parseVisibility = (try (string "protected") >> return C.Protected) <|> (try (string "private") >> return C.Protected) <|> (string "public" >> return C.Protected)
+
+parseClass :: GenParser Char st C.Class
+parseClass = do
+    us <- usings
+    many newline
+    ns <- namespace
+    many $ newline
+    curlyStart
+    spaces
+    visibility <- parseVisibility
+    return $ C.Class us ns visibility []
+
+run_parseClass = run_parse parseClass
+
+
+test :: IO ()
+test = do
+    handle <- openFile "../test-data/SomeClass.cs" ReadMode  
+    contents <- hGetContents handle
+    case run_parseClass contents of
+        Left err -> print err
+        Right c -> print c
+    hClose handle 

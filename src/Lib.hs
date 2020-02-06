@@ -1,59 +1,10 @@
 module Lib
-    ( parseCSV
-    , run_parseClass
+    ( run_parseClass
     ) where
         
 import Text.ParserCombinators.Parsec
 import qualified Class as C
 import System.IO
-
-{- A CSV file contains 0 or more lines, each of which is terminated
-   by the end-of-line character (eol). -}
-csvFile :: GenParser Char st [[String]]
-csvFile = 
-    do result <- many line
-       eof
-       return result
-
--- Each line contains 1 or more cells, separated by a comma
-line :: GenParser Char st [String]
-line = 
-    do result <- cells
-       eol                       -- end of line
-       return result
-       
--- Build up a list of cells.  Try to parse the first cell, then figure out 
--- what ends the cell.
-cells :: GenParser Char st [String]
-cells = 
-    do first <- cellContent
-       next <- remainingCells
-       return (first : next)
-
--- The cell either ends with a comma, indicating that 1 or more cells follow,
--- or it doesn't, indicating that we're at the end of the cells for this line
-remainingCells :: GenParser Char st [String]
-remainingCells =
-    (char ',' >> cells)            -- Found comma?  More cells coming
-    <|> (return [])                -- No comma?  Return [], no more cells
-
--- Each cell contains 0 or more characters, which must not be a comma or
--- EOL
-cellContent :: GenParser Char st String
-cellContent = 
-    many (noneOf ",\n")
-       
-
--- The end of line character is \n
-eol :: GenParser Char st Char
-eol = char '\n'
-
-parseCSV :: String -> Either ParseError [[String]]
-parseCSV input = parse csvFile "(unknown)" input
-
-
-
--- CS PARSER ---------------------------------------------------------------------------------------
 
 run_usings = run_parse usings
 
@@ -69,7 +20,9 @@ namespace :: GenParser Char st String
 namespace = string "namespace" >> space >> manyTill anyChar ((char '\n') <|> space <|> char '{')
 
 curlyStart :: GenParser Char st String
-curlyStart = char '{' >> many newline
+curlyStart = char '{' >> trim
+
+curlyEnd = char '}' >> trim
 
 parseVisibility :: GenParser Char st C.Visibility
 parseVisibility = 
@@ -81,23 +34,48 @@ parseClassName :: GenParser Char st String
 parseClassName = manyTill anyChar space
 
 parseBaseClasses :: GenParser Char st [String]
-parseBaseClasses = char ':' >> space >> sepBy (manyTill anyChar <* newline ) (char ',')
+parseBaseClasses = char ':' >> space >> sepBy (many alphaNum) (string ", ")
+
+parseProperties = many $ do
+    vis <- parseVisibility <* trim
+    static <- exists (string "static") <* trim
+    readonly <- exists (string "readonly") <* trim
+    datatype <- many alphaNum <* trim
+    name <- manyTill anyChar $ char ';' <|> space <|> char '='
+    value <- trim >> ((char '=' >> try space >> manyTill anyChar newline) <|> return "")
+    return $ C.Property datatype name value vis readonly static
+
+parseParameters = sepBy (do
+    datatype <- many alphaNum <* trim
+    name <- many alphaNum <* trim
+    return $ C.Parameter datatype name) (string ", ")
+
+parseContent = many (noneOf "{") >> many (noneOf "}")
+
+parseConstructor = do
+    vis <- parseVisibility <* trim
+    many alphaNum
+    char '('
+    parameters <- parseParameters
+    content <- parseContent
+    return $ C.Constructor vis parameters content
+
+exists :: (GenParser Char st a) -> GenParser Char st Bool
+exists rule = (rule >> return True) <|> return False
+
+trim :: GenParser Char st String
+trim = many $ oneOf " \n{}"
 
 parseClass :: GenParser Char st C.Class
 parseClass = do
-    us <- usings
-    many newline
-    ns <- namespace
-    many newline
-    curlyStart
-    spaces
-    visibility <- parseVisibility
-    space
-    string "class"
-    space
-    className <- parseClassName
+    us <- usings <* trim
+    ns <- namespace <* trim
+    visibility <- trim >> parseVisibility
+    className <- space >> string "class" >> space >> parseClassName
     baseClasses <- try parseBaseClasses
-    return $ C.Class us ns visibility className baseClasses []
+    properties <- trim >> parseProperties
+    ctors <- trim >> many1 parseConstructor
+    return $ C.Class us ns visibility className baseClasses properties ctors
 
 run_parseClass = run_parse parseClass
 

@@ -13,7 +13,7 @@ using AutoMapper.QueryableExtensions;
 
 namespace DataAccess.Queries.Shared
 {
-    public class SagQuery : ISagQuery
+    public class SagQuery : ISagQuery, ISomeOtherInterface
     {
         private readonly DatabaseDataContext _context;
         private readonly IBruger _bruger;

@@ -63,11 +63,7 @@ run_parse rule input = parse rule "(Source)" input
 usings = many using
 
 using :: GenParser Char st String
-using = do
-    u <- string "using"
-    s <- space
-    r <- manyTill anyChar (char '\n')
-    return $ u ++ [s] ++ r
+using = do string "using" >> space >> manyTill anyChar (char ';') <* many newline
 
 namespace :: GenParser Char st String
 namespace = string "namespace" >> space >> manyTill anyChar ((char '\n') <|> space <|> char '{')
@@ -76,18 +72,32 @@ curlyStart :: GenParser Char st String
 curlyStart = char '{' >> many newline
 
 parseVisibility :: GenParser Char st C.Visibility
-parseVisibility = (try (string "protected") >> return C.Protected) <|> (try (string "private") >> return C.Protected) <|> (string "public" >> return C.Protected)
+parseVisibility = 
+    (try (string "protected") >> return C.Protected) <|> 
+    (try (string "private") >> return C.Protected) <|> 
+    (string "public" >> return C.Protected)
+
+parseClassName :: GenParser Char st String
+parseClassName = manyTill anyChar space
+
+parseBaseClasses :: GenParser Char st [String]
+parseBaseClasses = char ':' >> space >> sepBy (manyTill anyChar <* newline ) (char ',')
 
 parseClass :: GenParser Char st C.Class
 parseClass = do
     us <- usings
     many newline
     ns <- namespace
-    many $ newline
+    many newline
     curlyStart
     spaces
     visibility <- parseVisibility
-    return $ C.Class us ns visibility []
+    space
+    string "class"
+    space
+    className <- parseClassName
+    baseClasses <- try parseBaseClasses
+    return $ C.Class us ns visibility className baseClasses []
 
 run_parseClass = run_parse parseClass
 

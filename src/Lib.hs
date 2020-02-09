@@ -92,7 +92,17 @@ parseClass = do
     members <- parseMembers
     return $ C.Class us ns visibility className baseClasses members
 
-run_parseClass = run_parse parseClass
+removeComments :: GenParser Char st String
+removeComments = do 
+    withoutComments <- manyTill (removeSimpleComment <|> (eof >> return [])) $ try eof
+    return $ concat withoutComments
+
+removeSimpleComment = manyTill anyChar $ (try $ string "//") <* manyTill anyChar newline <|> (try $ string "/*") <* manyTill anyChar (try $ string "*/") <|> (eof >> return [])
+
+run_parseClass :: String -> Either ParseError C.Class
+run_parseClass contents = case run_parse removeComments contents of
+    Right text -> run_parse parseClass text
+    Left err -> Left err
 
 
 test :: IO ()

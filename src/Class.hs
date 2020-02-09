@@ -7,18 +7,18 @@ type ReturnType = Datatype
 type Name = String
 type Content = String
 
-data Readonly = Readonly | Mutable deriving (Show)
+data Readonly = Readonly | Mutable deriving (Show, Eq)
 
-data Static = Static | NonStatic deriving (Show)
+data Static = Static | NonStatic deriving (Show, Eq)
 
-data Visibility = Protected | Private | Public deriving (Show)
+data Visibility = Protected | Private | Public deriving (Show, Eq)
 
-data Parameter = Parameter Datatype String deriving (Show)
+data Parameter = Parameter Datatype String deriving (Show, Eq)
 
 data Member = Property Datatype String String Visibility Readonly Static
             | Constructor Visibility [Parameter] Content
             | Method Visibility ReturnType Name [Parameter] Content
-            deriving (Show)
+            deriving (Show, Eq)
 
 data Class = Class { usings :: [String]
                    , namespace :: String
@@ -26,4 +26,4 @@ data Class = Class { usings :: [String]
                    , className :: ClassName
                    , baseClasses :: [BaseClass]
                    , members :: [Member]
-                   } deriving (Show)
+                   } deriving (Show, Eq)

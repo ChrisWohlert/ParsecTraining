@@ -32,6 +32,7 @@ namespace DataAccess.Queries.Shared
 
         public List<SagModel> GetAfsluttedeSagerForMyndighed(int myndighedId)
         {
+            Console.writeline("ASDASD");
         }
     }
 }

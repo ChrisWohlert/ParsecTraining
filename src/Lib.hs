@@ -27,8 +27,8 @@ curlyEnd = char '}' >> trim
 parseVisibility :: GenParser Char st C.Visibility
 parseVisibility = 
     (try (string "protected") >> return C.Protected) <|> 
-    (try (string "private") >> return C.Protected) <|> 
-    (string "public" >> return C.Protected)
+    (try (string "private") >> return C.Private) <|> 
+    (string "public" >> return C.Public)
 
 parseClassName :: GenParser Char st String
 parseClassName = manyTill anyChar space
@@ -36,13 +36,15 @@ parseClassName = manyTill anyChar space
 parseBaseClasses :: GenParser Char st [String]
 parseBaseClasses = char ':' >> space >> sepBy (many alphaNum) (string ", ")
 
-parseProperties = many $ do
+parseProperty = do
     vis <- parseVisibility <* trim
-    static <- exists (string "static") <* trim
-    readonly <- exists (string "readonly") <* trim
+    static <- (string "static" >> return C.Static) <|> return C.NonStatic
+    trim
+    readonly <- (string "readonly" >> return C.Readonly) <|> return C.Mutable
+    trim
     datatype <- many alphaNum <* trim
-    name <- manyTill anyChar $ char ';' <|> space <|> char '='
-    value <- trim >> ((char '=' >> try space >> manyTill anyChar newline) <|> return "")
+    name <- manyTill legalName $ char ';' <|> space <|> char '='
+    value <- trim >> ((char '=' >> try space >> manyTill anyChar newline) <|> return "") <* trim
     return $ C.Property datatype name value vis readonly static
 
 parseParameters = sepBy (do
@@ -50,15 +52,25 @@ parseParameters = sepBy (do
     name <- many alphaNum <* trim
     return $ C.Parameter datatype name) (string ", ")
 
-parseContent = many (noneOf "{") >> many (noneOf "}")
+parseContent = many (noneOf "{") >> char '{' >> many (noneOf "}")
 
 parseConstructor = do
     vis <- parseVisibility <* trim
     many alphaNum
     char '('
     parameters <- parseParameters
-    content <- parseContent
+    content <- parseContent <* trim
     return $ C.Constructor vis parameters content
+
+parseMethod = do
+    vis <- parseVisibility <* trim
+    returnType <- many legalDatatype <* trim
+    name <- many legalName
+    parameters <- char '(' >> parseParameters
+    content <- parseContent <* trim
+    return $ C.Method vis returnType name parameters content
+
+parseMembers = many1 $ try parseProperty <|> try parseConstructor <|> try parseMethod
 
 exists :: (GenParser Char st a) -> GenParser Char st Bool
 exists rule = (rule >> return True) <|> return False
@@ -66,16 +78,19 @@ exists rule = (rule >> return True) <|> return False
 trim :: GenParser Char st String
 trim = many $ oneOf " \n{}"
 
+legalName = alphaNum <|> char '_'
+
+legalDatatype = alphaNum <|> oneOf "<>"
+
 parseClass :: GenParser Char st C.Class
 parseClass = do
     us <- usings <* trim
     ns <- namespace <* trim
     visibility <- trim >> parseVisibility
     className <- space >> string "class" >> space >> parseClassName
-    baseClasses <- try parseBaseClasses
-    properties <- trim >> parseProperties
-    ctors <- trim >> many1 parseConstructor
-    return $ C.Class us ns visibility className baseClasses properties ctors
+    baseClasses <- try parseBaseClasses <* trim
+    members <- parseMembers
+    return $ C.Class us ns visibility className baseClasses members
 
 run_parseClass = run_parse parseClass
 

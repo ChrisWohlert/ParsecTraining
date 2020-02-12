@@ -49,6 +49,18 @@ main = hspec $ do
         run_parseClass someClass `shouldBe` Right (Class { usings = ["System","System.Collections.Generic","System.Security","Core.Constants","Core.Models.Shared","Core.Queries","Core.Queries.Shared","Core.User","DataAccess.Bruger","DataAccess.Database","System.Linq","AutoMapper.QueryableExtensions"]
                                                     , namespace = "DataAccess.Queries.Shared", visibility = Public, className = "SagQuery"
                                                     , baseClasses = ["ISagQuery","ISomeOtherInterface"]
-                                                    , members = [Property (Single "DatabaseDataContext") "_context" "" Private Readonly NonStatic,Property (List "IBruger") "_bruger" "" Private Readonly NonStatic,Property (List "ITolkeBrugerQuery") "_tolkeBrugerQuery" "" Private Readonly NonStatic,Constructor Public [Parameter (Single "DatabaseDataContext") "context",Parameter (Single "IBruger") "bruger",Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery"] "\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        ",Method Public (Single "SagModel") "Get" [Parameter (Single "int") "id"] "\n        ",Method Public (List "SagModel") "GetAfsluttedeSagerForMyndighed" [Parameter (Single "int") "myndighedId"] "\n            Console.writeline(\"ASDASD\");\n        "]})
+                                                    , members = [Property (Single "DatabaseDataContext") "_context" "" Private Readonly NonStatic,Property (List (Single "IBruger")) "_bruger" "" Private Readonly NonStatic,Property (List (Single "ITolkeBrugerQuery")) "_tolkeBrugerQuery" "" Private Readonly NonStatic,Constructor Public [Parameter (Single "DatabaseDataContext") "context",Parameter (Single "IBruger") "bruger",Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery"] "\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        ",Method Public (Single "SagModel") "Get" [Parameter (Single "int") "id"] "\n        ",Method Public (List (Single "SagModel")) "GetAfsluttedeSagerForMyndighed" [Parameter (Single "int") "myndighedId"] "\n            Console.writeline(\"ASDASD\");\n        "]})
+                                                
+    describe "Lib.parseProperty -> single property" $ do
+      it "returns a single of properties" $ do
+        run_parse parseProperty "private static readonly Datatype _name;" `shouldBe` Right (Property (Single "Datatype") "_name" "" Private Readonly Static)
+
+    describe "Lib.parseProperty -> Array property" $ do
+      it "returns a single of properties" $ do
+        run_parse parseProperty "private static readonly Datatype[] _name;" `shouldBe` Right (Property (List (Single "Datatype")) "_name" "" Private Readonly Static)
+
+    describe "Lib.parseProperty -> Array property with space" $ do
+      it "returns a single of properties" $ do
+        run_parse parseProperty "private static readonly Datatype [] _name;" `shouldBe` Right (Property (List (Single "Datatype")) "_name" "" Private Readonly Static)
 
 

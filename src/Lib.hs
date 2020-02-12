@@ -1,5 +1,7 @@
 module Lib
-    ( run_parseClass
+    ( run_parse
+    , run_parseClass
+    , parseProperty
     ) where
         
 import Text.ParserCombinators.Parsec
@@ -44,7 +46,7 @@ parseProperty = do
     trim
     datatype <- parseDatatype <* trim
     name <- manyTill legalName $ char ';' <|> space <|> char '='
-    value <- trim >> ((char '=' >> try space >> manyTill anyChar newline) <|> return "") <* trim
+    value <- trim >> (try (char '=' >> try space >> manyTill anyChar newline) <|> return "") <* trim
     return $ C.Property datatype name value vis readonly static
 
 parseParameters = sepBy (do
@@ -76,17 +78,18 @@ parseDatatype :: GenParser Char st C.Datatype
 parseDatatype = try parseList <|> try parseArray <|> parseSingle
 
 parseSingle = do
-    datatype <- many $ noneOf " =\n"
+    datatype <- many $ noneOf " =\n<>["
     return $ C.Single datatype
 
 parseList = do
     string "List<"
-    datatype <- many (noneOf ">") <* char '>'
+    datatype <- parseSingle <* char '>'
     return $ C.List datatype
 
 parseArray = do
-    datatype <- manyTill (letter <|> space) $ char '[' <* char ']'    
-    return $ C.List (filter (/= ' ') datatype)
+    datatype <- parseSingle <* trim
+    char '[' >> char ']'
+    return $ C.List datatype
 
 exists :: (GenParser Char st a) -> GenParser Char st Bool
 exists rule = (rule >> return True) <|> return False

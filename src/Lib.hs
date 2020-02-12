@@ -2,11 +2,17 @@ module Lib
     ( run_parse
     , run_parseClass
     , parseProperty
+    , test
+    , getFilesFromDir
+    , dirTest
     ) where
         
 import Text.ParserCombinators.Parsec
 import qualified Class as C
 import System.IO
+import System.Directory
+import System.Path
+import Control.Monad
 
 run_usings = run_parse usings
 
@@ -124,9 +130,38 @@ run_parseClass contents = case run_parse removeComments contents of
 
 test :: IO ()
 test = do
-    handle <- openFile "../test-data/SomeClass.cs" ReadMode  
+    dir <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
+    print dir
+    content <- mapM getContent dir
+    print "asd"
+
+getContent :: String -> IO (Either ParseError C.Class)
+getContent file = do
+    handle <- openFile file ReadMode  
     contents <- hGetContents handle
-    case run_parseClass contents of
-        Left err -> print err
-        Right c -> print c
-    hClose handle 
+    run_parseClass contents
+    hClose handle
+
+parseFile :: String -> Either ParseError C.Class
+parseFile file = do
+    handle <- openFile file ReadMode
+    contents <- hGetContents handle
+    hClose handle
+    run_parseClass contents
+
+getFilesFromDir :: FilePath -> IO [String]
+getFilesFromDir p = do
+    exists <- doesPathExist p
+    if exists then do
+        dir <- listDirectory p
+        let folders = map ((p ++ "/") ++) . map (++ "/") . filter (not . elem '.') $ dir
+        let files = map ((p ++ "/") ++) . filter (not . null) . filter isCsFile $ dir
+        filesFromFolders <- mapM getFilesFromDir folders
+        return $ files ++ (concat filesFromFolders)
+    else
+        return []
+
+dirTest = listDirectory
+
+isCsFile :: String -> Bool
+isCsFile = (".cs" ==) . dropWhile (/= '.')

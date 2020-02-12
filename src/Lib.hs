@@ -42,13 +42,13 @@ parseProperty = do
     trim
     readonly <- (string "readonly" >> return C.Readonly) <|> return C.Mutable
     trim
-    datatype <- many alphaNum <* trim
+    datatype <- parseDatatype <* trim
     name <- manyTill legalName $ char ';' <|> space <|> char '='
     value <- trim >> ((char '=' >> try space >> manyTill anyChar newline) <|> return "") <* trim
     return $ C.Property datatype name value vis readonly static
 
 parseParameters = sepBy (do
-    datatype <- many alphaNum <* trim
+    datatype <- parseDatatype <* trim
     name <- many alphaNum <* trim
     return $ C.Parameter datatype name) (string ", ")
 
@@ -64,13 +64,29 @@ parseConstructor = do
 
 parseMethod = do
     vis <- parseVisibility <* trim
-    returnType <- many legalDatatype <* trim
+    returnType <- parseDatatype <* trim
     name <- many legalName
     parameters <- char '(' >> parseParameters
     content <- parseContent <* trim
     return $ C.Method vis returnType name parameters content
 
 parseMembers = many1 $ try parseProperty <|> try parseConstructor <|> try parseMethod
+
+parseDatatype :: GenParser Char st C.Datatype
+parseDatatype = try parseList <|> try parseArray <|> parseSingle
+
+parseSingle = do
+    datatype <- many $ noneOf " =\n"
+    return $ C.Single datatype
+
+parseList = do
+    string "List<"
+    datatype <- many (noneOf ">") <* char '>'
+    return $ C.List datatype
+
+parseArray = do
+    datatype <- manyTill (letter <|> space) $ char '[' <* char ']'    
+    return $ C.List (filter (/= ' ') datatype)
 
 exists :: (GenParser Char st a) -> GenParser Char st Bool
 exists rule = (rule >> return True) <|> return False
@@ -80,12 +96,10 @@ trim = many $ oneOf " \n{}"
 
 legalName = alphaNum <|> char '_'
 
-legalDatatype = alphaNum <|> oneOf "<>"
-
 parseClass :: GenParser Char st C.Class
 parseClass = do
     us <- usings <* trim
-    ns <- namespace <* trim
+    ns <- namespace <* trim    
     visibility <- trim >> parseVisibility
     className <- space >> string "class" >> space >> parseClassName
     baseClasses <- try parseBaseClasses <* trim

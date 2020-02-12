@@ -1,11 +1,12 @@
 module Class where
 
-type Datatype = String
 type ClassName = String
 type BaseClass = String
 type ReturnType = Datatype
 type Name = String
 type Content = String
+
+data Datatype = Single String | List String deriving (Show, Eq)
 
 data Readonly = Readonly | Mutable deriving (Show, Eq)
 

@@ -11,13 +11,10 @@ import Text.ParserCombinators.Parsec
 import qualified Class as C
 import System.IO
 import System.Directory
-import System.Path
 import Control.Monad
 
-run_usings = run_parse usings
-
-run_parse :: (GenParser Char () a) -> String -> Either ParseError a
-run_parse rule input = parse rule "(Source)" input
+run_parse :: (GenParser Char () a) -> String -> String -> Either ParseError a
+run_parse rule input source = parse rule source input
 
 usings = many using
 
@@ -107,6 +104,7 @@ legalName = alphaNum <|> char '_'
 
 parseClass :: GenParser Char st C.Class
 parseClass = do
+    removeBom
     us <- usings <* trim
     ns <- namespace <* trim    
     visibility <- trim >> parseVisibility
@@ -115,6 +113,8 @@ parseClass = do
     members <- parseMembers
     return $ C.Class us ns visibility className baseClasses members
 
+removeBom = try $ string "\180\9559\9488"
+
 removeComments :: GenParser Char st String
 removeComments = do 
     withoutComments <- manyTill (removeSimpleComment <|> (eof >> return [])) $ try eof
@@ -122,44 +122,34 @@ removeComments = do
 
 removeSimpleComment = manyTill anyChar $ (try $ string "//") <* manyTill anyChar newline <|> (try $ string "/*") <* manyTill anyChar (try $ string "*/") <|> (eof >> return [])
 
-run_parseClass :: String -> Either ParseError C.Class
-run_parseClass contents = case run_parse removeComments contents of
-    Right text -> run_parse parseClass text
+run_parseClass :: String -> String -> Either ParseError C.Class
+run_parseClass contents source = case run_parse removeComments contents source of
+    Right text -> run_parse parseClass text source
     Left err -> Left err
 
 
 test :: IO ()
 test = do
-    dir <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
-    print dir
-    content <- mapM getContent dir
-    print "asd"
+    files <- getFilesFromDir "C:/Users/Chris/Google Drev/Programmering/Haskell/ParsecTraining"
+    mapM getContent $ take 1 files
+    print "Done."
 
-getContent :: String -> IO (Either ParseError C.Class)
+getContent :: String -> IO ()
 getContent file = do
     handle <- openFile file ReadMode  
     contents <- hGetContents handle
-    run_parseClass contents
+    case run_parseClass contents file of
+        Left err -> print err
+        Right c -> print c
     hClose handle
-
-parseFile :: String -> Either ParseError C.Class
-parseFile file = do
-    handle <- openFile file ReadMode
-    contents <- hGetContents handle
-    hClose handle
-    run_parseClass contents
 
 getFilesFromDir :: FilePath -> IO [String]
 getFilesFromDir p = do
-    exists <- doesPathExist p
-    if exists then do
-        dir <- listDirectory p
-        let folders = map ((p ++ "/") ++) . map (++ "/") . filter (not . elem '.') $ dir
-        let files = map ((p ++ "/") ++) . filter (not . null) . filter isCsFile $ dir
-        filesFromFolders <- mapM getFilesFromDir folders
-        return $ files ++ (concat filesFromFolders)
-    else
-        return []
+    dir <- listDirectory p
+    folders <- filterM doesPathExist . map ((p ++ "/") ++) . map (++ "/") $ dir
+    let files = map ((p ++ "/") ++) . filter (not . null) . filter isCsFile $ dir
+    filesFromFolders <- mapM getFilesFromDir folders
+    return $ files ++ (concat filesFromFolders)
 
 dirTest = listDirectory
 

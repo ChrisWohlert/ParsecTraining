@@ -1,6 +1,7 @@
 module Lib
     ( run_parse
     , run_parseClass
+    , parseClass
     , parseProperty
     , test
     , getFilesFromDir
@@ -35,13 +36,23 @@ parseVisibility =
     (try (string "private") >> return C.Private) <|> 
     (string "public" >> return C.Public)
 
-parseClassName :: GenParser Char st String
-parseClassName = manyTill anyChar space
+parseClassName :: GenParser Char st C.ClassName
+parseClassName = try parseGenericClassName <|> parseSimpleClassName
+
+parseGenericClassName = do 
+    name <- many letter
+    generic <- fromTo '<' '>'
+    return $ C.GenericClassName name generic
+
+parseSimpleClassName = do
+    name <- many letter
+    return $ C.ClassName name
 
 parseBaseClasses :: GenParser Char st [String]
 parseBaseClasses = char ':' >> space >> sepBy (many alphaNum) (string ", ")
 
 parseProperty = do
+    attrs <- parseAttributes <* trim
     vis <- parseVisibility <* trim
     static <- (string "static" >> return C.Static) <|> return C.NonStatic
     trim
@@ -50,14 +61,16 @@ parseProperty = do
     datatype <- parseDatatype <* trim
     name <- manyTill legalName $ char ';' <|> space <|> char '='
     value <- trim >> (try (char '=' >> try space >> manyTill anyChar newline) <|> return "") <* trim
-    return $ C.Property datatype name value vis readonly static
+    return $ C.Property datatype name value vis readonly static attrs
+
+parseAttributes = many $ fromTo '[' ']'
 
 parseParameters = sepBy (do
     datatype <- parseDatatype <* trim
     name <- many alphaNum <* trim
     return $ C.Parameter datatype name) (string ", ")
 
-parseContent = many (noneOf "{") >> char '{' >> many (noneOf "}")
+parseContent = many (noneOf "{") >> fromTo '{' '}'
 
 parseConstructor = do
     vis <- parseVisibility <* trim
@@ -94,11 +107,16 @@ parseArray = do
     char '[' >> char ']'
     return $ C.List datatype
 
+parseAbstract = string "abstract"
+
 exists :: (GenParser Char st a) -> GenParser Char st Bool
 exists rule = (rule >> return True) <|> return False
 
 trim :: GenParser Char st String
 trim = many $ oneOf " \n{}"
+
+fromTo :: Char -> Char -> GenParser Char st String
+fromTo start end = (char start) >> many (noneOf [end]) <* char end
 
 legalName = alphaNum <|> char '_'
 
@@ -107,13 +125,15 @@ parseClass = do
     removeBom
     us <- usings <* trim
     ns <- namespace <* trim    
-    visibility <- trim >> parseVisibility
-    className <- space >> string "class" >> space >> parseClassName
+    attrs <- parseAttributes <* trim
+    visibility <- trim >> parseVisibility <* trim
+    abstract <- exists parseAbstract <* trim
+    className <- string "class" >> space >> parseClassName <* trim
     baseClasses <- try parseBaseClasses <* trim
     members <- parseMembers
-    return $ C.Class us ns visibility className baseClasses members
+    return $ C.Class us ns visibility abstract className baseClasses members attrs
 
-removeBom = try $ string "\180\9559\9488"
+removeBom = many $ oneOf "\180\9559\9488"
 
 removeComments :: GenParser Char st String
 removeComments = do 
@@ -127,10 +147,9 @@ run_parseClass contents source = case run_parse removeComments contents source o
     Right text -> run_parse parseClass text source
     Left err -> Left err
 
-
 test :: IO ()
 test = do
-    files <- getFilesFromDir "C:/Users/Chris/Google Drev/Programmering/Haskell/ParsecTraining"
+    files <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
     mapM getContent $ take 1 files
     print "Done."
 

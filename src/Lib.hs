@@ -49,7 +49,7 @@ parseSimpleClassName = do
     return $ C.ClassName name
 
 parseBaseClasses :: GenParser Char st [String]
-parseBaseClasses = char ':' >> space >> sepBy (many alphaNum) (string ", ")
+parseBaseClasses =  try (char ':' >> space >> sepBy (many alphaNum) (string ", ")) <|> return []
 
 parseProperty = do
     attrs <- parseAttributes <* trim
@@ -109,6 +109,8 @@ parseArray = do
 
 parseAbstract = string "abstract"
 
+parseConstraints = string "where" >> trim >> manyTill anyChar (char '\n')
+
 exists :: (GenParser Char st a) -> GenParser Char st Bool
 exists rule = (rule >> return True) <|> return False
 
@@ -128,10 +130,11 @@ parseClass = do
     attrs <- parseAttributes <* trim
     visibility <- trim >> parseVisibility <* trim
     abstract <- exists parseAbstract <* trim
-    className <- string "class" >> space >> parseClassName <* trim
+    className <- string "class" >> trim >> parseClassName <* trim
     baseClasses <- try parseBaseClasses <* trim
+    constraints <- parseConstraints <* trim
     members <- parseMembers
-    return $ C.Class us ns visibility abstract className baseClasses members attrs
+    return $ C.Class us ns visibility abstract className baseClasses constraints members attrs
 
 removeBom = many $ oneOf "\180\9559\9488"
 

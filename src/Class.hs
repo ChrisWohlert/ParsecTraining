@@ -16,7 +16,7 @@ data Static = Static | NonStatic deriving (Show, Eq)
 
 data Visibility = Protected | Private | Public deriving (Show, Eq)
 
-data ClassName = ClassName Name | GenericClassName Name String Constraints deriving (Show, Eq)
+data ClassName = ClassName Name | GenericClassName Name String deriving (Show, Eq)
 
 data Parameter = Parameter Datatype String deriving (Show, Eq)
 
@@ -31,6 +31,7 @@ data Class = Class { usings :: [String]
                    , abstract :: Abstract
                    , className :: ClassName
                    , baseClasses :: [BaseClass]
+                   , constraints :: Constraints
                    , members :: [Member]
                    , attributes :: [Attribute]
                    } deriving (Show, Eq)

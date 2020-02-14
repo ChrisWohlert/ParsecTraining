@@ -49,9 +49,10 @@ main = hspec $ do
       it "returns a Class from a .cs file" $ do
         run_parseClass someClass "(Test)" `shouldBe` Right (Class { usings = ["System","System.Collections.Generic","System.Security","Core.Constants","Core.Models.Shared","Core.Queries","Core.Queries.Shared","Core.User","DataAccess.Bruger","DataAccess.Database","System.Linq","AutoMapper.QueryableExtensions"]
                                                                   , namespace = "DataAccess.Queries.Shared", visibility = Public
-                                                                  , className = GenericClassName "SagQuery" "T" "struct"
+                                                                  , className = GenericClassName "SagQuery" "T"
                                                                   , abstract = True
                                                                   , baseClasses = ["ISagQuery","ISomeOtherInterface"]
+                                                                  , constraints = "T : struct, new"
                                                                   , members = [ Property (Single "DatabaseDataContext") "_context" "" Private Readonly NonStatic []
                                                                               , Property (List (Single "IBruger")) "_bruger" "" Private Readonly NonStatic []
                                                                               , Property (List (Single "ITolkeBrugerQuery")) "_tolkeBrugerQuery" "" Private Readonly NonStatic []

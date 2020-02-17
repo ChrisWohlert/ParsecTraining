@@ -8,8 +8,9 @@ namespace ConvNetSharp.Volume.Tests
     [TestFixture]
     public abstract class VolumeTests<T> where T : struct, IEquatable<T>, IFormattable
     {
+        
         protected abstract Volume<T> NewVolume(double[] values, Shape shape);
-
+        
         [Test]
         public void Add1D()
         {
@@ -22,6 +23,7 @@ namespace ConvNetSharp.Volume.Tests
             AssertNumber.AreEqual(4.0, result.Get(1));
             AssertNumber.AreEqual(6.0, result.Get(2));
         }
+
 
         /// <summary>
         ///     Test +=

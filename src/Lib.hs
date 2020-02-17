@@ -6,6 +6,13 @@ module Lib
     , test
     , getFilesFromDir
     , dirTest
+    , parseAbstractMethod
+    , parseMethod
+    , parseParameters
+    , parseMembers
+    , parseContent
+    , parseConcreteMethod
+    , parseConstructor
     ) where
         
 import Text.ParserCombinators.Parsec
@@ -40,12 +47,12 @@ parseClassName :: GenParser Char st C.ClassName
 parseClassName = try parseGenericClassName <|> parseSimpleClassName
 
 parseGenericClassName = do 
-    name <- many letter
+    name <- many alphaNum
     generic <- fromTo '<' '>'
     return $ C.GenericClassName name generic
 
 parseSimpleClassName = do
-    name <- many letter
+    name <- many alphaNum
     return $ C.ClassName name
 
 parseBaseClasses :: GenParser Char st [String]
@@ -65,36 +72,74 @@ parseProperty = do
 
 parseAttributes = many $ fromTo '[' ']'
 
-parseParameters = sepBy (do
-    datatype <- parseDatatype <* trim
-    name <- many alphaNum <* trim
-    return $ C.Parameter datatype name) (string ", ")
+parseParameters = do
+    parameters <- manyTill (do
+        datatype <- parseDatatype <* trim
+        name <- many1 alphaNum <* trim
+        try (string ", ") <|> return ""
+        return $ C.Parameter datatype name) (char ')')
+    return parameters
 
-parseContent = many (noneOf "{") >> fromTo '{' '}'
+parseContent d = parseContentStart
+
+parseContentStart = do
+    start <- char '{'
+    rest <- parseContentEnd
+    return $ start : rest
+
+parseContentEnd = do
+    start <- many $ noneOf "{}"
+    middle <- try parseContentStart <|> return ""
+    end <- many $ noneOf "}"
+    char '}'
+    return $ start ++ middle ++ end ++ "}"
 
 parseConstructor = do
     vis <- parseVisibility <* trim
     many alphaNum
     char '('
-    parameters <- parseParameters
-    content <- parseContent <* trim
+    parameters <- parseParameters <* trim
+    content <- parseContent 0 <* trim
     return $ C.Constructor vis parameters content
 
-parseMethod = do
+parseMethod = try parseConcreteMethod <|> parseAbstractMethod
+
+parseConcreteMethod = do
+    attrs <- parseAttributes <* trim
     vis <- parseVisibility <* trim
     returnType <- parseDatatype <* trim
-    name <- many legalName
-    parameters <- char '(' >> parseParameters
-    content <- parseContent <* trim
-    return $ C.Method vis returnType name parameters content
+    name <- parseMethodName <* trim
+    parameters <- char '(' >> parseParameters <* trim
+    content <- parseContent 0 <* trim
+    return $ C.Method $ C.Concrete (C.MethodSignature vis returnType name parameters attrs) content
 
-parseMembers = many1 $ try parseProperty <|> try parseConstructor <|> try parseMethod
+parseAbstractMethod = do
+    attrs <- parseAttributes <* trim
+    vis <- parseVisibility <* trim
+    abstr <- parseAbstract <* trim
+    returnType <- parseDatatype <* trim
+    name <- parseMethodName <* trim
+    parameters <- char '(' >> parseParameters <* string ";" <* trim
+    return $ C.Method $ C.Abstract (C.MethodSignature vis returnType name parameters attrs)
+
+parseMethodName = try parseGenericMethodName <|> parseSimpleMethodName
+
+parseGenericMethodName = do 
+    name <- many alphaNum
+    generic <- fromTo '<' '>'
+    return $ C.GenericMethodName name generic
+
+parseSimpleMethodName = do
+    name <- many alphaNum
+    return $ C.MethodName name
+
+parseMembers = many1 ((try parseMethod <|> try parseConstructor <|> try parseProperty) <* trim)
 
 parseDatatype :: GenParser Char st C.Datatype
-parseDatatype = try parseList <|> try parseArray <|> parseSingle
+parseDatatype = try parseList <|> try parseArray <|> try parseGenericDatatype <|> parseSingle
 
 parseSingle = do
-    datatype <- many $ noneOf " =\n<>["
+    datatype <- (try parseAbstract >> fail "abstract is not a datatype") <|> many (noneOf " =\n<>[")
     return $ C.Single datatype
 
 parseList = do
@@ -107,15 +152,20 @@ parseArray = do
     char '[' >> char ']'
     return $ C.List datatype
 
+parseGenericDatatype = do
+    datatype <- parseSingle <* trim
+    generic <- fromTo '<' '>'
+    return $ C.Generic datatype generic
+
 parseAbstract = string "abstract"
 
 parseConstraints = string "where" >> trim >> manyTill anyChar (char '\n')
 
 exists :: (GenParser Char st a) -> GenParser Char st Bool
-exists rule = (rule >> return True) <|> return False
+exists rule = (try rule >> return True) <|> return False
 
 trim :: GenParser Char st String
-trim = many $ oneOf " \n{}"
+trim = many $ oneOf " \n"
 
 fromTo :: Char -> Char -> GenParser Char st String
 fromTo start end = (char start) >> many (noneOf [end]) <* char end
@@ -126,13 +176,15 @@ parseClass :: GenParser Char st C.Class
 parseClass = do
     removeBom
     us <- usings <* trim
-    ns <- namespace <* trim    
+    ns <- namespace <* trim
+    char '{' <* trim
     attrs <- parseAttributes <* trim
     visibility <- trim >> parseVisibility <* trim
     abstract <- exists parseAbstract <* trim
     className <- string "class" >> trim >> parseClassName <* trim
     baseClasses <- try parseBaseClasses <* trim
     constraints <- parseConstraints <* trim
+    char '{' <* trim
     members <- parseMembers
     return $ C.Class us ns visibility abstract className baseClasses constraints members attrs
 

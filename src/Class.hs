@@ -1,32 +1,35 @@
 module Class where
 
-type BaseClass = String
 type ReturnType = Datatype
 type Name = String
 type Content = String
 type Attribute = String
 type Abstract = Bool
 type Constraints = String
+type Value = String
+type Extension = Bool
 
 data Datatype = Single String | Generic Datatype String | List Datatype deriving (Show, Eq)
+
+type BaseClass = Datatype
 
 data Readonly = Readonly | Mutable deriving (Show, Eq)
 
 data Static = Static | NonStatic deriving (Show, Eq)
 
-data Visibility = Protected | Private | Public deriving (Show, Eq)
+data Visibility = Protected | Private | Public | Internal deriving (Show, Eq)
 
 data ClassName = ClassName Name | GenericClassName Name String deriving (Show, Eq)
 
 data MethodName = MethodName Name | GenericMethodName Name String deriving (Show, Eq)
 
-data Parameter = Parameter Datatype String deriving (Show, Eq)
+data Parameter = Parameter Datatype Name (Maybe Value) Extension deriving (Show, Eq)
 
-data MethodSignature = MethodSignature Visibility ReturnType MethodName [Parameter] [Attribute] deriving (Show, Eq)
+data MethodSignature = MethodSignature Visibility Static ReturnType MethodName [Parameter] [Attribute] deriving (Show, Eq)
 
-data Method = Concrete MethodSignature Content | Abstract MethodSignature deriving (Show, Eq)
+data Method = Concrete MethodSignature Content | Abstract MethodSignature | Override MethodSignature Content deriving (Show, Eq)
 
-data Member = Property Datatype String String Visibility Readonly Static [Attribute]
+data Member = Property Datatype Name Value Visibility Readonly Static [Attribute]
             | Constructor Visibility [Parameter] Content
             | Method Method
             deriving (Show, Eq)

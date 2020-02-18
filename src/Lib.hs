@@ -20,6 +20,7 @@ import qualified Class as C
 import System.IO
 import System.Directory
 import Control.Monad
+import System.Exit
 
 run_parse :: (GenParser Char () a) -> String -> String -> Either ParseError a
 run_parse rule input source = parse rule source input
@@ -41,6 +42,7 @@ parseVisibility :: GenParser Char st C.Visibility
 parseVisibility = 
     (try (string "protected") >> return C.Protected) <|> 
     (try (string "private") >> return C.Private) <|> 
+    (try (string "internal") >> return C.Internal) <|> 
     (string "public" >> return C.Public)
 
 parseClassName :: GenParser Char st C.ClassName
@@ -55,13 +57,13 @@ parseSimpleClassName = do
     name <- many alphaNum
     return $ C.ClassName name
 
-parseBaseClasses :: GenParser Char st [String]
-parseBaseClasses =  try (char ':' >> space >> sepBy (many alphaNum) (string ", ")) <|> return []
+parseBaseClasses :: GenParser Char st [C.BaseClass]
+parseBaseClasses =  try (char ':' >> space >> sepBy (parseDatatype) (string ", ")) <|> return []
 
 parseProperty = do
     attrs <- parseAttributes <* trim
     vis <- parseVisibility <* trim
-    static <- (string "static" >> return C.Static) <|> return C.NonStatic
+    static <- parseStatic 
     trim
     readonly <- (string "readonly" >> return C.Readonly) <|> return C.Mutable
     trim
@@ -70,22 +72,28 @@ parseProperty = do
     value <- trim >> (try (char '=' >> try space >> manyTill anyChar newline) <|> return "") <* trim
     return $ C.Property datatype name value vis readonly static attrs
 
+parseStatic = (string "static" >> return C.Static) <|> return C.NonStatic
+
 parseAttributes = many $ fromTo '[' ']'
 
 parseParameters = do
     parameters <- manyTill (do
+        extension <- exists $ string "this " <* trim
         datatype <- parseDatatype <* trim
         name <- many1 alphaNum <* trim
+        value <- try (char '=' >> trim >> many (noneOf ",)")) <|> return ""
         try (string ", ") <|> return ""
-        return $ C.Parameter datatype name) (char ')')
+        return $ C.Parameter datatype name (if value /= [] then Just value else Nothing) extension) (char ')')
     return parameters
 
-parseContent d = parseContentStart
+parseContent = parseContentStart '{' 1
 
-parseContentStart = do
-    start <- char '{'
+parseContentStart _ 0 = string "}"
+parseContentStart c d = do
+    start <- char c
     middle <- many $ noneOf "{}"
-
+    content <- try (parseContentStart '{' (d + 1)) <|> parseContentStart '}' (d - 1)
+    return $ start : middle ++ content
     
 
 parseConstructor = do
@@ -93,28 +101,41 @@ parseConstructor = do
     many alphaNum
     char '('
     parameters <- parseParameters <* trim
-    content <- parseContent 0 <* trim
+    content <- parseContent <* trim
     return $ C.Constructor vis parameters content
 
-parseMethod = try parseConcreteMethod <|> parseAbstractMethod
+parseMethod = (try parseConcreteMethod <|> try parseOverrideMethod <|> parseAbstractMethod) <* trim
 
 parseConcreteMethod = do
     attrs <- parseAttributes <* trim
     vis <- parseVisibility <* trim
+    static <- parseStatic <* trim
     returnType <- parseDatatype <* trim
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* trim
-    content <- parseContent 0 <* trim
-    return $ C.Method $ C.Concrete (C.MethodSignature vis returnType name parameters attrs) content
+    content <- parseContent <* trim
+    return $ C.Method $ C.Concrete (C.MethodSignature vis static returnType name parameters attrs) content
+    
+parseOverrideMethod = do
+    attrs <- parseAttributes <* trim
+    vis <- parseVisibility <* trim
+    static <- parseStatic <* trim
+    override <- parseOverride <* trim
+    returnType <- parseDatatype <* trim
+    name <- parseMethodName <* trim
+    parameters <- char '(' >> parseParameters <* trim
+    content <- parseContent <* trim
+    return $ C.Method $ C.Override (C.MethodSignature vis static returnType name parameters attrs) content
 
 parseAbstractMethod = do
     attrs <- parseAttributes <* trim
     vis <- parseVisibility <* trim
+    static <- parseStatic <* trim
     abstr <- parseAbstract <* trim
     returnType <- parseDatatype <* trim
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* string ";" <* trim
-    return $ C.Method $ C.Abstract (C.MethodSignature vis returnType name parameters attrs)
+    return $ C.Method $ C.Abstract (C.MethodSignature vis static returnType name parameters attrs)
 
 parseMethodName = try parseGenericMethodName <|> parseSimpleMethodName
 
@@ -133,7 +154,7 @@ parseDatatype :: GenParser Char st C.Datatype
 parseDatatype = try parseList <|> try parseArray <|> try parseGenericDatatype <|> parseSingle
 
 parseSingle = do
-    datatype <- (try parseAbstract >> fail "abstract is not a datatype") <|> many (noneOf " =\n<>[")
+    datatype <- (try parseAbstract >> fail "abstract is not a datatype") <|> many (noneOf " =\n<>[,")
     return $ C.Single datatype
 
 parseList = do
@@ -153,13 +174,15 @@ parseGenericDatatype = do
 
 parseAbstract = string "abstract"
 
+parseOverride = string "override"
+
 parseConstraints = string "where" >> trim >> manyTill anyChar (char '\n')
 
 exists :: (GenParser Char st a) -> GenParser Char st Bool
 exists rule = (try rule >> return True) <|> return False
 
 trim :: GenParser Char st String
-trim = many $ oneOf " \n"
+trim = many $ oneOf " \n\t"
 
 fromTo :: Char -> Char -> GenParser Char st String
 fromTo start end = (char start) >> many (noneOf [end]) <* char end
@@ -174,10 +197,11 @@ parseClass = do
     char '{' <* trim
     attrs <- parseAttributes <* trim
     visibility <- trim >> parseVisibility <* trim
+    static <- parseStatic <* trim
     abstract <- exists parseAbstract <* trim
     className <- string "class" >> trim >> parseClassName <* trim
     baseClasses <- try parseBaseClasses <* trim
-    constraints <- parseConstraints <* trim
+    constraints <- try (parseConstraints <* trim) <|> return ""
     char '{' <* trim
     members <- parseMembers
     return $ C.Class us ns visibility abstract className baseClasses constraints members attrs
@@ -198,8 +222,8 @@ run_parseClass contents source = case run_parse removeComments contents source o
 
 test :: IO ()
 test = do
-    files <- getFilesFromDir "D:/haskell/ParsecTraining"
-    mapM getContent $ take 1 files
+    files <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
+    mapM getContent files
     print "Done."
 
 getContent :: String -> IO ()
@@ -207,8 +231,11 @@ getContent file = do
     handle <- openFile file ReadMode  
     contents <- hGetContents handle
     case run_parseClass contents file of
-        Left err -> print err
-        Right c -> print c
+        Left err -> do
+            print err
+            exitSuccess
+        Right c -> do 
+            print "."
     hClose handle
 
 getFilesFromDir :: FilePath -> IO [String]

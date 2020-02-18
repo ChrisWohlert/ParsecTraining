@@ -112,7 +112,7 @@ main = hspec $ do
 
     describe "Lib.parseContent -> content with multi curlys" $ do
       it "returns all content" $ do
-        run_test (parseContent 0) "{ for{{}}}" `shouldBe` (Right "{ for{{}}}")
+        run_test (parseContent 0) "{ for{{}} }" `shouldBe` (Right "{ for{{}} }")
 
     describe "Lib.parseConstructor -> constructor" $ do
       it "constructor" $ do
@@ -129,5 +129,28 @@ main = hspec $ do
                                                  , Parameter (Single "IBruger") "bruger"
                                                  , Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery"] "{\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        }"))
 
+    describe "Lib.parseContent -> content with multi curlys" $ do
+      it "returns all content" $ do
+         run_test (parseContent 0) "\
+\{\n\
+\    var left = this.NewVolume(new[] { 1.0, 2.0, 3.0 }, new Shape(3));\n\
+\    var right = this.NewVolume(new[] { 1.0, 2.0, 3.0 }, new Shape(3));\n\
+\    var result = BuilderInstance<T>.Volume.SameAs(new Shape(3));\n\
+\\n\
+\    left.Add(right, result);\n\
+\    AssertNumber.AreEqual(2.0, result.Get(0));\n\
+\    AssertNumber.AreEqual(4.0, result.Get(1));\n\
+\    AssertNumber.AreEqual(6.0, result.Get(2));\n\
+\}" `shouldBe` (Right ("\
+\{\n\
+\    var left = this.NewVolume(new[] { 1.0, 2.0, 3.0 }, new Shape(3));\n\
+\    var right = this.NewVolume(new[] { 1.0, 2.0, 3.0 }, new Shape(3));\n\
+\    var result = BuilderInstance<T>.Volume.SameAs(new Shape(3));\n\
+\\n\
+\    left.Add(right, result);\n\
+\    AssertNumber.AreEqual(2.0, result.Get(0));\n\
+\    AssertNumber.AreEqual(4.0, result.Get(1));\n\
+\    AssertNumber.AreEqual(6.0, result.Get(2));\n\
+\}"))
 
 run_test rule input = run_parse rule input "(Test)"

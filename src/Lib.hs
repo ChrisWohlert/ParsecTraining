@@ -84,15 +84,9 @@ parseContent d = parseContentStart
 
 parseContentStart = do
     start <- char '{'
-    rest <- parseContentEnd
-    return $ start : rest
+    middle <- many $ noneOf "{}"
 
-parseContentEnd = do
-    start <- many $ noneOf "{}"
-    middle <- try parseContentStart <|> return ""
-    end <- many $ noneOf "}"
-    char '}'
-    return $ start ++ middle ++ end ++ "}"
+    
 
 parseConstructor = do
     vis <- parseVisibility <* trim
@@ -204,7 +198,7 @@ run_parseClass contents source = case run_parse removeComments contents source o
 
 test :: IO ()
 test = do
-    files <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
+    files <- getFilesFromDir "D:/haskell/ParsecTraining"
     mapM getContent $ take 1 files
     print "Done."
 

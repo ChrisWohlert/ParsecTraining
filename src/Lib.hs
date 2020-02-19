@@ -13,6 +13,7 @@ module Lib
     , parseContent
     , parseConcreteMethod
     , parseConstructor
+    , parseEnum
     ) where
         
 import Text.ParserCombinators.Parsec
@@ -43,7 +44,8 @@ parseVisibility =
     (try (string "protected") >> return C.Protected) <|> 
     (try (string "private") >> return C.Private) <|> 
     (try (string "internal") >> return C.Internal) <|> 
-    (string "public" >> return C.Public)
+    (try (string "public") >> return C.Public) <|>
+    return C.Unset
 
 parseClassName :: GenParser Char st C.ClassName
 parseClassName = try parseGenericClassName <|> parseSimpleClassName
@@ -65,14 +67,17 @@ parseProperty = do
     vis <- parseVisibility <* trim
     static <- parseStatic 
     trim
-    readonly <- (string "readonly" >> return C.Readonly) <|> return C.Mutable
+    readonly <- parseReadonly <* trim
     trim
     datatype <- parseDatatype <* trim
-    name <- manyTill legalName $ char ';' <|> space <|> char '='
-    value <- trim >> (try (char '=' >> try space >> manyTill anyChar newline) <|> return "") <* trim
-    return $ C.Property datatype name value vis readonly static attrs
+    name <- manyTill legalName (oneOf " ;={") <* trim
+    getset <- (try (fromTo '{' '}') <|> return "") <* trim
+    value <- (try (char '=' >> try space >> manyTill anyChar (char ';')) <|> return "") <* trim
+    return $ C.Property datatype name getset value vis readonly static attrs
 
-parseStatic = (string "static" >> return C.Static) <|> return C.NonStatic
+parseStatic = (try (string "static") >> return C.Static) <|> return C.NonStatic
+
+parseReadonly = (try (string "readonly") >> return C.Readonly) <|> return C.Mutable
 
 parseAttributes = many $ fromTo '[' ']'
 
@@ -189,22 +194,38 @@ fromTo start end = (char start) >> many (noneOf [end]) <* char end
 
 legalName = alphaNum <|> char '_'
 
-parseClass :: GenParser Char st C.Class
-parseClass = do
+parseType = do
     removeBom
     us <- usings <* trim
-    ns <- namespace <* trim
+    ns <- namespace <* trim 
     char '{' <* trim
+    try (parseEnum us ns) <|> (parseClass us ns)
+
+parseClass :: [String] -> String -> GenParser Char st C.Type
+parseClass us ns = do
     attrs <- parseAttributes <* trim
     visibility <- trim >> parseVisibility <* trim
     static <- parseStatic <* trim
     abstract <- exists parseAbstract <* trim
-    className <- string "class" >> trim >> parseClassName <* trim
+    className <- (try (string "class") <|> string "interface") >> trim >> parseClassName <* trim
     baseClasses <- try parseBaseClasses <* trim
     constraints <- try (parseConstraints <* trim) <|> return ""
     char '{' <* trim
     members <- parseMembers
     return $ C.Class us ns visibility abstract className baseClasses constraints members attrs
+
+parseEnum us ns = do
+    attrs <- parseAttributes <* trim
+    visibility <- trim >> parseVisibility <* trim
+    string "enum" <* trim
+    name <- many alphaNum <* trim
+    char '{' <* trim
+    elements <- parseEnumElements
+    return $ C.Enum us ns visibility name elements attrs
+
+parseEnumElements = many1 parseEnumElement
+
+parseEnumElement = many (noneOf " ,=\n") <* many (noneOf ",}") <* (try (char ',') <|> char '}')
 
 removeBom = many $ oneOf "\180\9559\9488"
 
@@ -215,9 +236,9 @@ removeComments = do
 
 removeSimpleComment = manyTill anyChar $ (try $ string "//") <* manyTill anyChar newline <|> (try $ string "/*") <* manyTill anyChar (try $ string "*/") <|> (eof >> return [])
 
-run_parseClass :: String -> String -> Either ParseError C.Class
+run_parseClass :: String -> String -> Either ParseError C.Type
 run_parseClass contents source = case run_parse removeComments contents source of
-    Right text -> run_parse parseClass text source
+    Right text -> run_parse parseType text source
     Left err -> Left err
 
 test :: IO ()

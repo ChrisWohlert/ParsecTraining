@@ -8,6 +8,7 @@ type Abstract = Bool
 type Constraints = String
 type Value = String
 type Extension = Bool
+type GetSet = String
 
 data Datatype = Single String | Generic Datatype String | List Datatype deriving (Show, Eq)
 
@@ -17,7 +18,7 @@ data Readonly = Readonly | Mutable deriving (Show, Eq)
 
 data Static = Static | NonStatic deriving (Show, Eq)
 
-data Visibility = Protected | Private | Public | Internal deriving (Show, Eq)
+data Visibility = Protected | Private | Public | Internal | Unset deriving (Show, Eq)
 
 data ClassName = ClassName Name | GenericClassName Name String deriving (Show, Eq)
 
@@ -29,18 +30,26 @@ data MethodSignature = MethodSignature Visibility Static ReturnType MethodName [
 
 data Method = Concrete MethodSignature Content | Abstract MethodSignature | Override MethodSignature Content deriving (Show, Eq)
 
-data Member = Property Datatype Name Value Visibility Readonly Static [Attribute]
+data Member = Property Datatype Name GetSet Value Visibility Readonly Static [Attribute]
             | Constructor Visibility [Parameter] Content
             | Method Method
             deriving (Show, Eq)
 
-data Class = Class { usings :: [String]
-                   , namespace :: String
-                   , visibility :: Visibility
-                   , abstract :: Abstract
-                   , className :: ClassName
-                   , baseClasses :: [BaseClass]
-                   , constraints :: Constraints
-                   , members :: [Member]
-                   , attributes :: [Attribute]
-                   } deriving (Show, Eq)
+data Type = Class { class_usings :: [String]
+                  , class_namespace :: String
+                  , class_visibility :: Visibility
+                  , class_abstract :: Abstract
+                  , class_name :: ClassName
+                  , class_baseClasses :: [BaseClass]
+                  , class_constraints :: Constraints
+                  , class_members :: [Member]
+                  , class_attributes :: [Attribute]
+                  } |
+            Enum { enum_usings :: [String]
+                 , enum_namespace :: String
+                 , enum_visibility :: Visibility
+                 , enum_name :: String
+                 , elements :: [String]
+                 , class_attributes :: [Attribute]
+            }
+            deriving (Show, Eq)

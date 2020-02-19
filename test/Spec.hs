@@ -20,10 +20,12 @@ someClass = "using System;\n\
 \    [Attribute(=\"ClassAttribute\")]\n\
 \    public abstract class SagQuery<T> : ISagQuery, ISomeOtherInterface where T : struct, new\n\
 \    {\n\
-\        private readonly DatabaseDataContext _context;\n\
+\        private readonly DatabaseDataContext _context = new DatabaseDataContext();\n\
 \        private readonly IBruger[] _bruger;\n\
 \        //Some comment\n\
 \        private readonly ITolkeBrugerQuery [] _tolkeBrugerQuery;\n\
+\\n\
+\        public string AProperty { get; set; }\n\
 \\n\
 \        public Sag/*SomeComment\n\nSomeMoreMultilineComment*/Query(DatabaseDataContext context, IBruger bruger, ITolkeBrugerQuery tolkeBrugerQuery)\n\
 \        {\n\
@@ -49,38 +51,44 @@ main :: IO ()
 main = hspec $ do
     describe "Lib.run_parseClass" $ do
       it "returns a Class from a .cs file" $ do
-        run_parseClass someClass "(Test)" `shouldBe` Right (Class { usings = ["System","System.Collections.Generic","System.Security","Core.Constants","Core.Models.Shared","Core.Queries","Core.Queries.Shared","Core.User","DataAccess.Bruger","DataAccess.Database","System.Linq","AutoMapper.QueryableExtensions"]
-                                                                  , namespace = "DataAccess.Queries.Shared", visibility = Public
-                                                                  , className = GenericClassName "SagQuery" "T"
-                                                                  , abstract = True
-                                                                  , baseClasses = [Single "ISagQuery", Single "ISomeOtherInterface"]
-                                                                  , constraints = "T : struct, new"
-                                                                  , members = [ Property (Single "DatabaseDataContext") "_context" "" Private Readonly NonStatic []
-                                                                              , Property (List (Single "IBruger")) "_bruger" "" Private Readonly NonStatic []
-                                                                              , Property (List (Single "ITolkeBrugerQuery")) "_tolkeBrugerQuery" "" Private Readonly NonStatic []
+        run_parseClass someClass "(Test)" `shouldBe` Right (Class { class_usings = ["System","System.Collections.Generic","System.Security","Core.Constants","Core.Models.Shared","Core.Queries","Core.Queries.Shared","Core.User","DataAccess.Bruger","DataAccess.Database","System.Linq","AutoMapper.QueryableExtensions"]
+                                                                  , class_namespace = "DataAccess.Queries.Shared"
+                                                                  , class_visibility = Public
+                                                                  , class_name = GenericClassName "SagQuery" "T"
+                                                                  , class_abstract = True
+                                                                  , class_baseClasses = [Single "ISagQuery", Single "ISomeOtherInterface"]
+                                                                  , class_constraints = "T : struct, new"
+                                                                  , class_members = [ Property (Single "DatabaseDataContext") "_context" "" "new DatabaseDataContext()" Private Readonly NonStatic []
+                                                                              , Property (List (Single "IBruger")) "_bruger" "" "" Private Readonly NonStatic []
+                                                                              , Property (List (Single "ITolkeBrugerQuery")) "_tolkeBrugerQuery" "" "" Private Readonly NonStatic []
+                                                                              , Property (Single "string") "AProperty" " get; set; " "" Public Mutable NonStatic []
                                                                               , Constructor Public [Parameter (Single "DatabaseDataContext") "context" Nothing False
                                                                                 , Parameter (Single "IBruger") "bruger" Nothing False
                                                                                 , Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery" Nothing False] "{\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        }"
                                                                               , Method (Concrete (MethodSignature Public Static (Single "void") (GenericMethodName "Get" "T") [Parameter (Single "T") "id" Nothing False] []) "{\n        }")
                                                                               , Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] []))
                                                                               , Method (Concrete (MethodSignature Public NonStatic (List (Single "SagModel")) (MethodName "GetAfsluttedeSagerForMyndighed") [Parameter (Single "int") "myndighedId" Nothing False] []) "{\n            Console.writeline(\"ASDASD\");\n        }")]
-                                                                  , attributes = ["Attribute(=\"ClassAttribute\")"]})
+                                                                  , class_attributes = ["Attribute(=\"ClassAttribute\")"]})
                                                 
     describe "Lib.parseProperty -> single property" $ do
       it "returns a single" $ do
-        run_test parseProperty "private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") "_name" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") "_name" "" "" Private Readonly Static []))
+
+    describe "Lib.parseProperty -> single property with get set" $ do
+      it "returns a single" $ do
+        run_test parseProperty "public string AProperty { get; set; }" `shouldBe` (Right (Property (Single "string") "AProperty" " get; set; " "" Public Mutable NonStatic []))
 
     describe "Lib.parseProperty -> Array property" $ do
       it "returns a list" $ do
-        run_test parseProperty "private static readonly Datatype[] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) "_name" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype[] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) "_name" "" "" Private Readonly Static []))
 
     describe "Lib.parseProperty -> Array property with space" $ do
       it "returns a list" $ do
-        run_test parseProperty "private static readonly Datatype [] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) "_name" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype [] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) "_name" "" "" Private Readonly Static []))
 
     describe "Lib.parseProperty -> Array property with attribute" $ do
       it "returns a single with attribute" $ do
-        run_test parseProperty "[Attribute(\"Name=Test\")] private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") "_name" "" Private Readonly Static ["Attribute(\"Name=Test\")"]))
+        run_test parseProperty "[Attribute(\"Name=Test\")] private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") "_name" "" "" Private Readonly Static ["Attribute(\"Name=Test\")"]))
 
     describe "Lib.parseAbstractMethod -> abstract method" $ do
       it "returns abstract method" $ do
@@ -160,5 +168,13 @@ main = hspec $ do
     describe "Lib.parseConcrete -> extension method" $ do
       it "returns method" $ do
         run_test parseConcreteMethod "public static void AreEqual<T>(this double delta){ for(...) { } test }" `shouldBe` (Right (Method (Concrete (MethodSignature Public Static (Single "void") (GenericMethodName "AreEqual" "T") [(Parameter (Single "double") "delta" Nothing True)] []) "{ for(...) { } test }")))
+
+    describe "Lib.parseEnum -> enum" $ do
+      it "returns enum" $ do
+        run_test (parseEnum [] []) "public enum DataLocation\n\
+                                      \{\n\
+                                      \    Host,\n\
+                                      \    Device\n\
+                                      \}" `shouldBe` (Right (Enum [] [] Public "DataLocation" ["Host", "Device"] []))
 
 run_test rule input = run_parse rule input "(Test)"

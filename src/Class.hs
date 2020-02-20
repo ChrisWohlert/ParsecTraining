@@ -26,18 +26,23 @@ data MethodName = MethodName Name | GenericMethodName Name String deriving (Show
 
 data Parameter = Parameter Datatype Name (Maybe Value) Extension deriving (Show, Eq)
 
-data MethodSignature = MethodSignature Visibility Static ReturnType MethodName [Parameter] [Attribute] deriving (Show, Eq)
+data MethodSignature = MethodSignature Visibility Static ReturnType MethodName [Parameter] Constraints [Attribute] deriving (Show, Eq)
 
 data Method = Concrete MethodSignature Content | Abstract MethodSignature | Override MethodSignature Content deriving (Show, Eq)
 
+data CtorCall = CtorCall String [String] deriving (Show, Eq)
+
 data Member = Property Datatype Name GetSet Value Visibility Readonly Static [Attribute]
-            | Constructor Visibility [Parameter] Content
+            | Constructor Visibility [Parameter] (Maybe CtorCall) Content
             | Method Method
             deriving (Show, Eq)
+
+data Safe = Safe | Unsafe deriving (Show, Eq)
 
 data Type = Class { class_usings :: [String]
                   , class_namespace :: String
                   , class_visibility :: Visibility
+                  , class_safe :: Safe
                   , class_abstract :: Abstract
                   , class_name :: ClassName
                   , class_baseClasses :: [BaseClass]

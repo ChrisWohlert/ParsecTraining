@@ -49,11 +49,12 @@ someClass = "using System;\n\
 
 main :: IO ()
 main = hspec $ do
-    describe "Lib.run_parseClass" $ do
+    describe "Lib.run_parseType" $ do
       it "returns a Class from a .cs file" $ do
-        run_parseClass someClass "(Test)" `shouldBe` Right (Class { class_usings = ["System","System.Collections.Generic","System.Security","Core.Constants","Core.Models.Shared","Core.Queries","Core.Queries.Shared","Core.User","DataAccess.Bruger","DataAccess.Database","System.Linq","AutoMapper.QueryableExtensions"]
+        run_parseType someClass "(Test)" `shouldBe` Right (Class { class_usings = ["System","System.Collections.Generic","System.Security","Core.Constants","Core.Models.Shared","Core.Queries","Core.Queries.Shared","Core.User","DataAccess.Bruger","DataAccess.Database","System.Linq","AutoMapper.QueryableExtensions"]
                                                                   , class_namespace = "DataAccess.Queries.Shared"
                                                                   , class_visibility = Public
+                                                                  , class_safe = Safe
                                                                   , class_name = GenericClassName "SagQuery" "T"
                                                                   , class_abstract = True
                                                                   , class_baseClasses = [Single "ISagQuery", Single "ISomeOtherInterface"]
@@ -64,10 +65,10 @@ main = hspec $ do
                                                                               , Property (Single "string") "AProperty" " get; set; " "" Public Mutable NonStatic []
                                                                               , Constructor Public [Parameter (Single "DatabaseDataContext") "context" Nothing False
                                                                                 , Parameter (Single "IBruger") "bruger" Nothing False
-                                                                                , Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery" Nothing False] "{\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        }"
-                                                                              , Method (Concrete (MethodSignature Public Static (Single "void") (GenericMethodName "Get" "T") [Parameter (Single "T") "id" Nothing False] []) "{\n        }")
-                                                                              , Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] []))
-                                                                              , Method (Concrete (MethodSignature Public NonStatic (List (Single "SagModel")) (MethodName "GetAfsluttedeSagerForMyndighed") [Parameter (Single "int") "myndighedId" Nothing False] []) "{\n            Console.writeline(\"ASDASD\");\n        }")]
+                                                                                , Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery" Nothing False] Nothing "{\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        }"
+                                                                              , Method (Concrete (MethodSignature Public Static (Single "void") (GenericMethodName "Get" "T") [Parameter (Single "T") "id" Nothing False] "" []) "{\n        }")
+                                                                              , Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] "" []))
+                                                                              , Method (Concrete (MethodSignature Public NonStatic (List (Single "SagModel")) (MethodName "GetAfsluttedeSagerForMyndighed") [Parameter (Single "int") "myndighedId" Nothing False] "" []) "{\n            Console.writeline(\"ASDASD\");\n        }")]
                                                                   , class_attributes = ["Attribute(=\"ClassAttribute\")"]})
                                                 
     describe "Lib.parseProperty -> single property" $ do
@@ -90,33 +91,41 @@ main = hspec $ do
       it "returns a single with attribute" $ do
         run_test parseProperty "[Attribute(\"Name=Test\")] private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") "_name" "" "" Private Readonly Static ["Attribute(\"Name=Test\")"]))
 
+    describe "Lib.parseProperty -> property multiple declarations" $ do
+      it "returns a Single with long name" $ do
+        run_test parseProperty "[Attribute(\"Name=Test\")] private Datatype _name, _name2, _name3;" `shouldBe` (Right (Property (Single "Datatype") "_name, _name2, _name3" "" "" Private Mutable NonStatic ["Attribute(\"Name=Test\")"]))
+
     describe "Lib.parseAbstractMethod -> abstract method" $ do
       it "returns abstract method" $ do
-        run_test parseAbstractMethod "public abstract SagModel Get(int id);" `shouldBe` (Right (Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] []))))
+        run_test parseAbstractMethod "public abstract SagModel Get(int id);" `shouldBe` (Right (Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] "" []))))
 
     describe "Lib.parseAbstractMethod -> generic method" $ do
       it "returns generic method" $ do
-        run_test parseAbstractMethod "public abstract SagModel Get<T>(int id);" `shouldBe` (Right (Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (GenericMethodName "Get" "T") [Parameter (Single "int") "id" Nothing False] []))))
+        run_test parseAbstractMethod "public abstract SagModel Get<T>(int id);" `shouldBe` (Right (Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (GenericMethodName "Get" "T") [Parameter (Single "int") "id" Nothing False] "" []))))
 
     describe "Lib.parseAbstractMethod -> generic returntype method" $ do
       it "returns generic returntype method" $ do
-        run_test parseAbstractMethod "public abstract SagModel<T> Get(int id);" `shouldBe` (Right (Method (Abstract (MethodSignature Public NonStatic (Generic (Single "SagModel") "T") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] []))))
+        run_test parseAbstractMethod "public abstract SagModel<T> Get(int id);" `shouldBe` (Right (Method (Abstract (MethodSignature Public NonStatic (Generic (Single "SagModel") "T") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] "" []))))
 
     describe "Lib.parseMethod -> method with attribute" $ do
       it "returns method with attribute" $ do
-        run_test parseMethod "[Attribute(Name = \"Test\")] public abstract SagModel Get(int id);" `shouldBe` (Right (Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] ["Attribute(Name = \"Test\")"]))))
+        run_test parseMethod "[Attribute(Name = \"Test\")] public abstract SagModel Get(int id);" `shouldBe` (Right (Method (Abstract (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [Parameter (Single "int") "id" Nothing False] "" ["Attribute(Name = \"Test\")"]))))
 
     describe "Lib.parseMethod -> method without parameters" $ do
       it "returns method without parameters" $ do
-        run_test parseMethod "public SagModel Get(){ something }" `shouldBe` (Right (Method (Concrete (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [] []) "{ something }")))
+        run_test parseMethod "public SagModel Get(){ something }" `shouldBe` (Right (Method (Concrete (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [] "" []) "{ something }")))
 
     describe "Lib.parseMethod -> method without parameters and with attribute" $ do
       it "returns method without parameters" $ do
-        run_test parseMembers "[Test] public SagModel Get2Got(){ something }" `shouldBe` (Right [(Method (Concrete (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get2Got") [] ["Test"]) "{ something }"))])
+        run_test parseMembers "[Test] public SagModel Get2Got(){ something }" `shouldBe` (Right [(Method (Concrete (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get2Got") [] "" ["Test"]) "{ something }"))])
 
     describe "Lib.parseMethod -> method without parameters with curlys" $ do
       it "returns method without parameters" $ do
-        run_test parseConcreteMethod "public SagModel Get(){ for(...) { } test }" `shouldBe` (Right (Method (Concrete (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [] []) "{ for(...) { } test }")))
+        run_test parseConcreteMethod "public SagModel Get(){ for(...) { } test }" `shouldBe` (Right (Method (Concrete (MethodSignature Public NonStatic (Single "SagModel") (MethodName "Get") [] "" []) "{ for(...) { } test }")))
+
+    describe "Lib.parseMethod -> method with T return type and constraints" $ do
+      it "returns method" $ do
+        run_test parseConcreteMethod "public static T Get<T>(object o) where T : struct, IEquatable<T>, IFormattable{}" `shouldBe` (Right (Method (Concrete (MethodSignature Public Static (Single "T") (GenericMethodName "Get" "T") [(Parameter (Single "object") "o" Nothing False)] "T : struct, IEquatable<T>, IFormattable" []) "{}")))
 
     describe "Lib.parseContent -> content with multi curlys" $ do
       it "returns all content" $ do
@@ -135,7 +144,12 @@ main = hspec $ do
 \        {\n\
 \        }" `shouldBe` (Right (Constructor Public [Parameter (Single "DatabaseDataContext") "context" Nothing False
                                                  , Parameter (Single "IBruger") "bruger" Nothing False
-                                                 , Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery" Nothing False] "{\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        }"))
+                                                 , Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery" Nothing False] Nothing "{\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        }"))
+
+    describe "Lib.parseConstructor -> constructor with this : (test)" $ do
+      it "return CtorCall" $ do
+        run_test parseConstructor "public SagQuery(IBruger bruger) : this(bruger)\n\
+\        {}" `shouldBe` (Right (Constructor Public [Parameter (Single "IBruger") "bruger" Nothing False] (Just (CtorCall "this" ["bruger"])) "{}"))
 
     describe "Lib.parseContent -> content with multi curlys" $ do
       it "returns all content" $ do
@@ -163,11 +177,11 @@ main = hspec $ do
 
     describe "Lib.parseConcrete -> method default parameter" $ do
       it "returns method" $ do
-        run_test parseConcreteMethod "public static void AreEqual<T>(double delta = 0){ for(...) { } test }" `shouldBe` (Right (Method (Concrete (MethodSignature Public Static (Single "void") (GenericMethodName "AreEqual" "T") [(Parameter (Single "double") "delta" (Just "0") False)] []) "{ for(...) { } test }")))
+        run_test parseConcreteMethod "public static void AreEqual<T>(double delta = 0){ for(...) { } test }" `shouldBe` (Right (Method (Concrete (MethodSignature Public Static (Single "void") (GenericMethodName "AreEqual" "T") [(Parameter (Single "double") "delta" (Just "0") False)] "" []) "{ for(...) { } test }")))
 
     describe "Lib.parseConcrete -> extension method" $ do
       it "returns method" $ do
-        run_test parseConcreteMethod "public static void AreEqual<T>(this double delta){ for(...) { } test }" `shouldBe` (Right (Method (Concrete (MethodSignature Public Static (Single "void") (GenericMethodName "AreEqual" "T") [(Parameter (Single "double") "delta" Nothing True)] []) "{ for(...) { } test }")))
+        run_test parseConcreteMethod "public static void AreEqual<T>(this double delta){ for(...) { } test }" `shouldBe` (Right (Method (Concrete (MethodSignature Public Static (Single "void") (GenericMethodName "AreEqual" "T") [(Parameter (Single "double") "delta" Nothing True)] "" []) "{ for(...) { } test }")))
 
     describe "Lib.parseEnum -> enum" $ do
       it "returns enum" $ do

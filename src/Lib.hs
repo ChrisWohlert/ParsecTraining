@@ -1,6 +1,6 @@
 module Lib
     ( run_parse
-    , run_parseClass
+    , run_parseType
     , parseClass
     , parseProperty
     , test
@@ -70,16 +70,26 @@ parseProperty = do
     readonly <- parseReadonly <* trim
     trim
     datatype <- parseDatatype <* trim
-    name <- manyTill legalName (oneOf " ;={") <* trim
+    name <- manyTill (anyChar) (oneOf ";={\n") <* trim
     getset <- (try (fromTo '{' '}') <|> return "") <* trim
     value <- (try (char '=' >> try space >> manyTill anyChar (char ';')) <|> return "") <* trim
-    return $ C.Property datatype name getset value vis readonly static attrs
+    return $ C.Property datatype ((reverse . dropWhile (== ' ') . reverse) name) getset value vis readonly static attrs
 
 parseStatic = (try (string "static") >> return C.Static) <|> return C.NonStatic
 
 parseReadonly = (try (string "readonly") >> return C.Readonly) <|> return C.Mutable
 
+parseSafe = (try (string "unsafe") >> return C.Unsafe) <|> return C.Safe
+
 parseAttributes = many $ fromTo '[' ']'
+
+parseCtorCall = try (do 
+    char ':' >> trim
+    name <- many letter <* trim
+    char '('
+    names <- sepBy (many (noneOf ",)")) (string ", ")
+    char ')'
+    return $ Just (C.CtorCall name names)) <|> return Nothing
 
 parseParameters = do
     parameters <- manyTill (do
@@ -106,8 +116,9 @@ parseConstructor = do
     many alphaNum
     char '('
     parameters <- parseParameters <* trim
+    ctorCall <- parseCtorCall <* trim
     content <- parseContent <* trim
-    return $ C.Constructor vis parameters content
+    return $ C.Constructor vis parameters ctorCall content
 
 parseMethod = (try parseConcreteMethod <|> try parseOverrideMethod <|> parseAbstractMethod) <* trim
 
@@ -118,8 +129,9 @@ parseConcreteMethod = do
     returnType <- parseDatatype <* trim
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* trim
+    constraints <- parseConstraints <* trim
     content <- parseContent <* trim
-    return $ C.Method $ C.Concrete (C.MethodSignature vis static returnType name parameters attrs) content
+    return $ C.Method $ C.Concrete (C.MethodSignature vis static returnType name parameters constraints attrs) content
     
 parseOverrideMethod = do
     attrs <- parseAttributes <* trim
@@ -129,8 +141,9 @@ parseOverrideMethod = do
     returnType <- parseDatatype <* trim
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* trim
+    constraints <- parseConstraints <* trim
     content <- parseContent <* trim
-    return $ C.Method $ C.Override (C.MethodSignature vis static returnType name parameters attrs) content
+    return $ C.Method $ C.Override (C.MethodSignature vis static returnType name parameters constraints attrs) content
 
 parseAbstractMethod = do
     attrs <- parseAttributes <* trim
@@ -140,7 +153,8 @@ parseAbstractMethod = do
     returnType <- parseDatatype <* trim
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* string ";" <* trim
-    return $ C.Method $ C.Abstract (C.MethodSignature vis static returnType name parameters attrs)
+    constraints <- parseConstraints <* trim
+    return $ C.Method $ C.Abstract (C.MethodSignature vis static returnType name parameters constraints attrs)
 
 parseMethodName = try parseGenericMethodName <|> parseSimpleMethodName
 
@@ -153,7 +167,7 @@ parseSimpleMethodName = do
     name <- many alphaNum
     return $ C.MethodName name
 
-parseMembers = many1 ((try parseMethod <|> try parseConstructor <|> try parseProperty) <* trim)
+parseMembers = (try (char '}') >> return []) <|> many1 ((try parseMethod <|> try parseConstructor <|> try parseProperty) <* trim)
 
 parseDatatype :: GenParser Char st C.Datatype
 parseDatatype = try parseList <|> try parseArray <|> try parseGenericDatatype <|> parseSingle
@@ -177,11 +191,12 @@ parseGenericDatatype = do
     generic <- fromTo '<' '>'
     return $ C.Generic datatype generic
 
+
 parseAbstract = string "abstract"
 
 parseOverride = string "override"
 
-parseConstraints = string "where" >> trim >> manyTill anyChar (char '\n')
+parseConstraints = (try (string "where") >> trim >> many (noneOf "\n{")) <|> return ""
 
 exists :: (GenParser Char st a) -> GenParser Char st Bool
 exists rule = (try rule >> return True) <|> return False
@@ -191,8 +206,6 @@ trim = many $ oneOf " \n\t"
 
 fromTo :: Char -> Char -> GenParser Char st String
 fromTo start end = (char start) >> many (noneOf [end]) <* char end
-
-legalName = alphaNum <|> char '_'
 
 parseType = do
     removeBom
@@ -205,6 +218,7 @@ parseClass :: [String] -> String -> GenParser Char st C.Type
 parseClass us ns = do
     attrs <- parseAttributes <* trim
     visibility <- trim >> parseVisibility <* trim
+    safe <- parseSafe <* trim
     static <- parseStatic <* trim
     abstract <- exists parseAbstract <* trim
     className <- (try (string "class") <|> string "interface") >> trim >> parseClassName <* trim
@@ -212,7 +226,7 @@ parseClass us ns = do
     constraints <- try (parseConstraints <* trim) <|> return ""
     char '{' <* trim
     members <- parseMembers
-    return $ C.Class us ns visibility abstract className baseClasses constraints members attrs
+    return $ C.Class us ns visibility safe abstract className baseClasses constraints members attrs
 
 parseEnum us ns = do
     attrs <- parseAttributes <* trim
@@ -225,7 +239,7 @@ parseEnum us ns = do
 
 parseEnumElements = many1 parseEnumElement
 
-parseEnumElement = many (noneOf " ,=\n") <* many (noneOf ",}") <* (try (char ',') <|> char '}')
+parseEnumElement = many alphaNum <* many (noneOf ",}") <* (try (char ',') <|> char '}') <* trim
 
 removeBom = many $ oneOf "\180\9559\9488"
 
@@ -236,8 +250,8 @@ removeComments = do
 
 removeSimpleComment = manyTill anyChar $ (try $ string "//") <* manyTill anyChar newline <|> (try $ string "/*") <* manyTill anyChar (try $ string "*/") <|> (eof >> return [])
 
-run_parseClass :: String -> String -> Either ParseError C.Type
-run_parseClass contents source = case run_parse removeComments contents source of
+run_parseType :: String -> String -> Either ParseError C.Type
+run_parseType contents source = case run_parse removeComments contents source of
     Right text -> run_parse parseType text source
     Left err -> Left err
 
@@ -251,7 +265,7 @@ getContent :: String -> IO ()
 getContent file = do
     handle <- openFile file ReadMode  
     contents <- hGetContents handle
-    case run_parseClass contents file of
+    case run_parseType contents file of
         Left err -> do
             print err
             exitSuccess

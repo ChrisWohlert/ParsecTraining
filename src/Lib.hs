@@ -105,12 +105,18 @@ parseMultiPropertyName = do
 parseParameters = do
     parameters <- manyTill (do
         extension <- exists $ string "this " <* trim
+        ref <- parseRef
+        params <- parseParams
         datatype <- parseDatatype <* trim
         name <- many1 alphaNum <* trim
         value <- try (char '=' >> trim >> many (noneOf ",)")) <|> return ""
         try (string ", ") <|> return ""
-        return $ C.Parameter datatype name (if value /= [] then Just value else Nothing) extension) (char ')')
+        return $ C.Parameter ref params datatype name (if value /= [] then Just value else Nothing) extension) (char ')')
     return parameters
+
+parseRef = (try (string "ref ") >> return C.Ref) <|> (try (string "out ") >> return C.Out) <|> return C.NoRef
+
+parseParams = (try (string "params ") >> return C.Params) <|> return C.NoParams
 
 parseContent = parseContentStart '{' 1
 
@@ -170,15 +176,15 @@ parseAbstractMethod = do
 parseMethodName = try parseGenericMethodName <|> parseSimpleMethodName
 
 parseGenericMethodName = do 
-    name <- many1 alphaNum
+    name <- many1 legalName
     generic <- fromTo '<' '>'
     return $ C.GenericMethodName name generic
 
 parseSimpleMethodName = do
-    name <- many1 alphaNum
+    name <- many1 legalName
     return $ C.MethodName name
 
-parseMembers = (try (char '}') >> return []) <|> many1 ((try parseMethod <|> try parseConstructor <|> try parseProperty) <* trim)
+parseMembers = (try (char '}') >> return []) <|> manyTill ((try parseMethod <|> try parseConstructor <|> try parseProperty) <* trim) (char '}')
 
 parseDatatype :: GenParser Char st C.Datatype
 parseDatatype = try parseList <|> try parseArray <|> try parseGenericDatatype <|> parseSingle
@@ -199,7 +205,7 @@ parseArray = do
 
 parseGenericDatatype = do
     datatype <- parseSingle <* trim
-    generic <- fromTo '<' '>'
+    generic <- char '<' >> sepBy parseDatatype (string ", ") <* char '>'
     return $ C.Generic datatype generic
 
 
@@ -270,7 +276,7 @@ run_parseType contents source = case run_parse removeComments contents source of
 
 test :: IO ()
 test = do
-    files <- getFilesFromDir "D:/haskell/ParsecTraining"
+    files <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
     mapM getContent files
     print "Done."
 

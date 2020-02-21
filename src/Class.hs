@@ -10,7 +10,7 @@ type Value = String
 type Extension = Bool
 type GetSet = String
 
-data Datatype = Single String | Generic Datatype String | List Datatype deriving (Show, Eq)
+data Datatype = Single String | Generic Datatype [Datatype] | List Datatype deriving (Show, Eq)
 
 type BaseClass = Datatype
 
@@ -24,7 +24,11 @@ data ClassName = ClassName Name | GenericClassName Name String deriving (Show, E
 
 data MethodName = MethodName Name | GenericMethodName Name String deriving (Show, Eq)
 
-data Parameter = Parameter Datatype Name (Maybe Value) Extension deriving (Show, Eq)
+data Ref = Ref | Out | NoRef deriving (Show, Eq)
+
+data Params = Params | NoParams deriving (Show, Eq)
+
+data Parameter = Parameter Ref Params Datatype Name (Maybe Value) Extension deriving (Show, Eq)
 
 data MethodSignature = MethodSignature Visibility Static ReturnType MethodName [Parameter] Constraints [Attribute] deriving (Show, Eq)
 

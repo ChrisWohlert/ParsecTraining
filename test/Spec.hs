@@ -59,10 +59,10 @@ main = hspec $ do
                                                                   , class_abstract = True
                                                                   , class_baseClasses = [Single "ISagQuery", Single "ISomeOtherInterface"]
                                                                   , class_constraints = "T : struct, new"
-                                                                  , class_members = [ Property (Single "DatabaseDataContext") "_context" "" "new DatabaseDataContext()" Private Readonly NonStatic []
-                                                                              , Property (List (Single "IBruger")) "_bruger" "" "" Private Readonly NonStatic []
-                                                                              , Property (List (Single "ITolkeBrugerQuery")) "_tolkeBrugerQuery" "" "" Private Readonly NonStatic []
-                                                                              , Property (Single "string") "AProperty" " get; set; " "" Public Mutable NonStatic []
+                                                                  , class_members = [ Property (Single "DatabaseDataContext") (PropertyName "_context") "" "new DatabaseDataContext()" Private Readonly NonStatic []
+                                                                              , Property (List (Single "IBruger")) (PropertyName "_bruger") "" "" Private Readonly NonStatic []
+                                                                              , Property (List (Single "ITolkeBrugerQuery")) (PropertyName "_tolkeBrugerQuery") "" "" Private Readonly NonStatic []
+                                                                              , Property (Single "string") (PropertyName "AProperty") " get; set; " "" Public Mutable NonStatic []
                                                                               , Constructor Public [Parameter (Single "DatabaseDataContext") "context" Nothing False
                                                                                 , Parameter (Single "IBruger") "bruger" Nothing False
                                                                                 , Parameter (Single "ITolkeBrugerQuery") "tolkeBrugerQuery" Nothing False] Nothing "{\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        }"
@@ -73,27 +73,27 @@ main = hspec $ do
                                                 
     describe "Lib.parseProperty -> single property" $ do
       it "returns a single" $ do
-        run_test parseProperty "private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") "_name" "" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") (PropertyName "_name") "" "" Private Readonly Static []))
 
     describe "Lib.parseProperty -> single property with get set" $ do
       it "returns a single" $ do
-        run_test parseProperty "public string AProperty { get; set; }" `shouldBe` (Right (Property (Single "string") "AProperty" " get; set; " "" Public Mutable NonStatic []))
+        run_test parseProperty "public string AProperty { get; set; }" `shouldBe` (Right (Property (Single "string") (PropertyName "AProperty") " get; set; " "" Public Mutable NonStatic []))
 
     describe "Lib.parseProperty -> Array property" $ do
       it "returns a list" $ do
-        run_test parseProperty "private static readonly Datatype[] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) "_name" "" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype[] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) (PropertyName "_name") "" "" Private Readonly Static []))
 
     describe "Lib.parseProperty -> Array property with space" $ do
       it "returns a list" $ do
-        run_test parseProperty "private static readonly Datatype [] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) "_name" "" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype [] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) (PropertyName "_name") "" "" Private Readonly Static []))
 
     describe "Lib.parseProperty -> Array property with attribute" $ do
       it "returns a single with attribute" $ do
-        run_test parseProperty "[Attribute(\"Name=Test\")] private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") "_name" "" "" Private Readonly Static ["Attribute(\"Name=Test\")"]))
+        run_test parseProperty "[Attribute(\"Name=Test\")] private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") (PropertyName "_name") "" "" Private Readonly Static ["Attribute(\"Name=Test\")"]))
 
     describe "Lib.parseProperty -> property multiple declarations" $ do
       it "returns a Single with long name" $ do
-        run_test parseProperty "[Attribute(\"Name=Test\")] private Datatype _name, _name2, _name3;" `shouldBe` (Right (Property (Single "Datatype") "_name, _name2, _name3" "" "" Private Mutable NonStatic ["Attribute(\"Name=Test\")"]))
+        run_test parseProperty "[Attribute(\"Name=Test\")] private Datatype _name, _name2, _name3;" `shouldBe` (Right (Property (Single "Datatype") (MultiName ["_name", "_name2", "_name3"]) "" "" Private Mutable NonStatic ["Attribute(\"Name=Test\")"]))
 
     describe "Lib.parseAbstractMethod -> abstract method" $ do
       it "returns abstract method" $ do

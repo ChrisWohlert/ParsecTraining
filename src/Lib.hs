@@ -70,10 +70,10 @@ parseProperty = do
     readonly <- parseReadonly <* trim
     trim
     datatype <- parseDatatype <* trim
-    name <- manyTill (anyChar) (oneOf ";={\n") <* trim
+    names <- parsePropertyName 
     getset <- (try (fromTo '{' '}') <|> return "") <* trim
     value <- (try (char '=' >> try space >> manyTill anyChar (char ';')) <|> return "") <* trim
-    return $ C.Property datatype ((reverse . dropWhile (== ' ') . reverse) name) getset value vis readonly static attrs
+    return $ C.Property datatype names getset value vis readonly static attrs
 
 parseStatic = (try (string "static") >> return C.Static) <|> return C.NonStatic
 
@@ -90,6 +90,17 @@ parseCtorCall = try (do
     names <- sepBy (many (noneOf ",)")) (string ", ")
     char ')'
     return $ Just (C.CtorCall name names)) <|> return Nothing
+
+parsePropertyName = try parseSinglePropertyName <|> parseMultiPropertyName --(try (manyTill legalName (oneOf " ,;={")) <|> sepBy (noneOf ",") (string ", ")) <* trim
+
+parseSinglePropertyName = do
+    name <- manyTill legalName $ oneOf " ;={"
+    return $ C.PropertyName name
+
+parseMultiPropertyName = do
+    names <- sepBy (many1 legalName) $ string ", "
+    oneOf " ;={"
+    return $ C.MultiName names
 
 parseParameters = do
     parameters <- manyTill (do
@@ -159,12 +170,12 @@ parseAbstractMethod = do
 parseMethodName = try parseGenericMethodName <|> parseSimpleMethodName
 
 parseGenericMethodName = do 
-    name <- many alphaNum
+    name <- many1 alphaNum
     generic <- fromTo '<' '>'
     return $ C.GenericMethodName name generic
 
 parseSimpleMethodName = do
-    name <- many alphaNum
+    name <- many1 alphaNum
     return $ C.MethodName name
 
 parseMembers = (try (char '}') >> return []) <|> many1 ((try parseMethod <|> try parseConstructor <|> try parseProperty) <* trim)
@@ -173,7 +184,7 @@ parseDatatype :: GenParser Char st C.Datatype
 parseDatatype = try parseList <|> try parseArray <|> try parseGenericDatatype <|> parseSingle
 
 parseSingle = do
-    datatype <- (try parseAbstract >> fail "abstract is not a datatype") <|> many (noneOf " =\n<>[,")
+    datatype <- (try parseAbstract >> fail "abstract is not a datatype") <|> many1 (noneOf " =\n<>[,")
     return $ C.Single datatype
 
 parseList = do
@@ -196,7 +207,7 @@ parseAbstract = string "abstract"
 
 parseOverride = string "override"
 
-parseConstraints = (try (string "where") >> trim >> many (noneOf "\n{")) <|> return ""
+parseConstraints = (try (string "where") >> trim >> many1 (noneOf "\n{")) <|> return ""
 
 exists :: (GenParser Char st a) -> GenParser Char st Bool
 exists rule = (try rule >> return True) <|> return False
@@ -206,6 +217,8 @@ trim = many $ oneOf " \n\t"
 
 fromTo :: Char -> Char -> GenParser Char st String
 fromTo start end = (char start) >> many (noneOf [end]) <* char end
+
+legalName = alphaNum <|> char '_'
 
 parseType = do
     removeBom
@@ -232,14 +245,14 @@ parseEnum us ns = do
     attrs <- parseAttributes <* trim
     visibility <- trim >> parseVisibility <* trim
     string "enum" <* trim
-    name <- many alphaNum <* trim
+    name <- many1 alphaNum <* trim
     char '{' <* trim
     elements <- parseEnumElements
     return $ C.Enum us ns visibility name elements attrs
 
 parseEnumElements = many1 parseEnumElement
 
-parseEnumElement = many alphaNum <* many (noneOf ",}") <* (try (char ',') <|> char '}') <* trim
+parseEnumElement = many1 alphaNum <* many (noneOf ",}") <* (try (char ',') <|> char '}') <* trim
 
 removeBom = many $ oneOf "\180\9559\9488"
 
@@ -257,7 +270,7 @@ run_parseType contents source = case run_parse removeComments contents source of
 
 test :: IO ()
 test = do
-    files <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
+    files <- getFilesFromDir "D:/haskell/ParsecTraining"
     mapM getContent files
     print "Done."
 

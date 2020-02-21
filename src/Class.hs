@@ -32,7 +32,9 @@ data Method = Concrete MethodSignature Content | Abstract MethodSignature | Over
 
 data CtorCall = CtorCall String [String] deriving (Show, Eq)
 
-data Member = Property Datatype Name GetSet Value Visibility Readonly Static [Attribute]
+data PropertyName = PropertyName Name | MultiName [Name] deriving (Show, Eq)
+
+data Member = Property Datatype PropertyName GetSet Value Visibility Readonly Static [Attribute]
             | Constructor Visibility [Parameter] (Maybe CtorCall) Content
             | Method Method
             deriving (Show, Eq)

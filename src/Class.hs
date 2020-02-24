@@ -8,7 +8,8 @@ type Abstract = Bool
 type Constraints = String
 type Value = String
 type Extension = Bool
-type GetSet = String
+
+data GetSet = GetSet String | ArrowGet String deriving (Show, Eq)
 
 data Datatype = Single String | Generic Datatype [Datatype] | List Datatype deriving (Show, Eq)
 
@@ -32,14 +33,19 @@ data Parameter = Parameter Ref Params Datatype Name (Maybe Value) Extension deri
 
 data MethodSignature = MethodSignature Visibility Static ReturnType MethodName [Parameter] Constraints [Attribute] deriving (Show, Eq)
 
-data Method = Concrete MethodSignature Content | Abstract MethodSignature | Override MethodSignature Content deriving (Show, Eq)
+data Method = Concrete MethodSignature Content 
+            | Abstract MethodSignature
+            | Override MethodSignature Content
+            | Interface MethodSignature
+            | External MethodSignature deriving (Show, Eq)
 
 data CtorCall = CtorCall String [String] deriving (Show, Eq)
 
 data PropertyName = PropertyName Name | MultiName [Name] deriving (Show, Eq)
 
-data Member = Property Datatype PropertyName GetSet Value Visibility Readonly Static [Attribute]
+data Member = Property Datatype PropertyName (Maybe GetSet) Value Visibility Readonly Static [Attribute]
             | Constructor Visibility [Parameter] (Maybe CtorCall) Content
+            | Desctructor [Parameter] Content
             | Method Method
             deriving (Show, Eq)
 
@@ -50,6 +56,7 @@ data Type = Class { class_usings :: [String]
                   , class_visibility :: Visibility
                   , class_safe :: Safe
                   , class_abstract :: Abstract
+                  , class_isInterface :: Bool
                   , class_name :: ClassName
                   , class_baseClasses :: [BaseClass]
                   , class_constraints :: Constraints
@@ -62,5 +69,5 @@ data Type = Class { class_usings :: [String]
                  , enum_name :: String
                  , elements :: [String]
                  , class_attributes :: [Attribute]
-            }
+                 }
             deriving (Show, Eq)

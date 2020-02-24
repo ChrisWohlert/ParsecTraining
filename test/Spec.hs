@@ -55,14 +55,15 @@ main = hspec $ do
                                                                   , class_namespace = "DataAccess.Queries.Shared"
                                                                   , class_visibility = Public
                                                                   , class_safe = Safe
+                                                                  , class_isInterface = False
                                                                   , class_name = GenericClassName "SagQuery" "T"
                                                                   , class_abstract = True
                                                                   , class_baseClasses = [Single "ISagQuery", Single "ISomeOtherInterface"]
                                                                   , class_constraints = "T : struct, new"
-                                                                  , class_members = [ Property (Single "DatabaseDataContext") (PropertyName "_context") "" "new DatabaseDataContext()" Private Readonly NonStatic []
-                                                                              , Property (List (Single "IBruger")) (PropertyName "_bruger") "" "" Private Readonly NonStatic []
-                                                                              , Property (List (Single "ITolkeBrugerQuery")) (PropertyName "_tolkeBrugerQuery") "" "" Private Readonly NonStatic []
-                                                                              , Property (Single "string") (PropertyName "AProperty") " get; set; " "" Public Mutable NonStatic []
+                                                                  , class_members = [ Property (Single "DatabaseDataContext") (PropertyName "_context") Nothing "new DatabaseDataContext()" Private Readonly NonStatic []
+                                                                              , Property (List (Single "IBruger")) (PropertyName "_bruger") Nothing "" Private Readonly NonStatic []
+                                                                              , Property (List (Single "ITolkeBrugerQuery")) (PropertyName "_tolkeBrugerQuery") Nothing "" Private Readonly NonStatic []
+                                                                              , Property (Single "string") (PropertyName "AProperty") (Just (GetSet " get; set; ")) "" Public Mutable NonStatic []
                                                                               , Constructor Public [Parameter NoRef NoParams (Single "DatabaseDataContext") "context" Nothing False
                                                                                 , Parameter NoRef NoParams (Single "IBruger") "bruger" Nothing False
                                                                                 , Parameter NoRef NoParams (Single "ITolkeBrugerQuery") "tolkeBrugerQuery" Nothing False] Nothing "{\n            _context = context;\n            _bruger = bruger;\n            _tolkeBrugerQuery = tolkeBrugerQuery;\n        }"
@@ -73,27 +74,31 @@ main = hspec $ do
                                                 
     describe "Lib.parseProperty -> single property" $ do
       it "returns a single" $ do
-        run_test parseProperty "private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") (PropertyName "_name") "" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") (PropertyName "_name") Nothing "" Private Readonly Static []))
 
     describe "Lib.parseProperty -> single property with get set" $ do
       it "returns a single" $ do
-        run_test parseProperty "public string AProperty { get; set; }" `shouldBe` (Right (Property (Single "string") (PropertyName "AProperty") " get; set; " "" Public Mutable NonStatic []))
+        run_test parseProperty "public string AProperty { get; set; }" `shouldBe` (Right (Property (Single "string") (PropertyName "AProperty") (Just (GetSet " get; set; ")) "" Public Mutable NonStatic []))
 
     describe "Lib.parseProperty -> Array property" $ do
       it "returns a list" $ do
-        run_test parseProperty "private static readonly Datatype[] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) (PropertyName "_name") "" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype[] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) (PropertyName "_name") Nothing "" Private Readonly Static []))
 
     describe "Lib.parseProperty -> Array property with space" $ do
       it "returns a list" $ do
-        run_test parseProperty "private static readonly Datatype [] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) (PropertyName "_name") "" "" Private Readonly Static []))
+        run_test parseProperty "private static readonly Datatype [] _name;" `shouldBe` (Right (Property (List (Single "Datatype")) (PropertyName "_name") Nothing "" Private Readonly Static []))
 
     describe "Lib.parseProperty -> Array property with attribute" $ do
       it "returns a single with attribute" $ do
-        run_test parseProperty "[Attribute(\"Name=Test\")] private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") (PropertyName "_name") "" "" Private Readonly Static ["Attribute(\"Name=Test\")"]))
+        run_test parseProperty "[Attribute(\"Name=Test\")] private static readonly Datatype _name;" `shouldBe` (Right (Property (Single "Datatype") (PropertyName "_name") Nothing "" Private Readonly Static ["Attribute(\"Name=Test\")"]))
 
     describe "Lib.parseProperty -> property multiple declarations" $ do
       it "returns a Single with long name" $ do
-        run_test parseProperty "[Attribute(\"Name=Test\")] private Datatype _name, _name2, _name3;" `shouldBe` (Right (Property (Single "Datatype") (MultiName ["_name", "_name2", "_name3"]) "" "" Private Mutable NonStatic ["Attribute(\"Name=Test\")"]))
+        run_test parseProperty "[Attribute(\"Name=Test\")] private Datatype _name, _name2, _name3;" `shouldBe` (Right (Property (Single "Datatype") (MultiName ["_name", "_name2", "_name3"]) Nothing "" Private Mutable NonStatic ["Attribute(\"Name=Test\")"]))
+
+    describe "Lib.parseMember -> Property with curly on new line" $ do
+      it "returns property" $ do
+        run_test parseMembers "public CudaContext CudaContext\n{\nget => this._cudaContext;\nprivate set => this._cudaContext = value;\n}}" `shouldBe` (Right [(Property (Single "CudaContext") (PropertyName "CudaContext") (Just (GetSet "\nget => this._cudaContext;\nprivate set => this._cudaContext = value;\n")) "" Public Mutable NonStatic [])])
 
     describe "Lib.parseAbstractMethod -> abstract method" $ do
       it "returns abstract method" $ do

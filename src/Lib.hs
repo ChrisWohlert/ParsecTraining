@@ -65,13 +65,11 @@ parseBaseClasses =  try (char ':' >> space >> sepBy (parseDatatype) (string ", "
 parseProperty = do
     attrs <- parseAttributes <* trim
     vis <- parseVisibility <* trim
-    static <- parseStatic 
-    trim
+    static <- parseStatic <* trim
     readonly <- parseReadonly <* trim
-    trim
     datatype <- parseDatatype <* trim
-    names <- parsePropertyName 
-    getset <- (try (fromTo '{' '}') <|> return "") <* trim
+    names <- parsePropertyName <* trim
+    getset <- parseGetSet <* trim
     value <- (try (char '=' >> try space >> manyTill anyChar (char ';')) <|> return "") <* trim
     return $ C.Property datatype names getset value vis readonly static attrs
 
@@ -81,25 +79,36 @@ parseReadonly = (try (string "readonly") >> return C.Readonly) <|> return C.Muta
 
 parseSafe = (try (string "unsafe") >> return C.Unsafe) <|> return C.Safe
 
+parseGetSet = try parseNormalGetSet <|> try parseArrowGet <|> return Nothing
+
+parseNormalGetSet = do
+    getset <- fromTo '{' '}'
+    return $ Just $ C.GetSet getset
+
+parseArrowGet = do
+    string "=>" <* trim
+    get <- manyTill anyChar (char ';')
+    return $ Just $ C.ArrowGet get
+
 parseAttributes = many $ fromTo '[' ']'
 
 parseCtorCall = try (do 
     char ':' >> trim
-    name <- many letter <* trim
+    name <- many1 letter <* trim
     char '('
     names <- sepBy (many (noneOf ",)")) (string ", ")
     char ')'
     return $ Just (C.CtorCall name names)) <|> return Nothing
 
-parsePropertyName = try parseSinglePropertyName <|> parseMultiPropertyName --(try (manyTill legalName (oneOf " ,;={")) <|> sepBy (noneOf ",") (string ", ")) <* trim
+parsePropertyName = try parseSinglePropertyName <|> parseMultiPropertyName
 
 parseSinglePropertyName = do
-    name <- manyTill legalName $ oneOf " ;={"
+    name <- manyTill legalName $ oneOf " ;={\n"
     return $ C.PropertyName name
 
 parseMultiPropertyName = do
     names <- sepBy (many1 legalName) $ string ", "
-    oneOf " ;={"
+    oneOf " ;={\n"
     return $ C.MultiName names
 
 parseParameters = do
@@ -127,17 +136,36 @@ parseContentStart c d = do
     content <- try (parseContentStart '{' (d + 1)) <|> parseContentStart '}' (d - 1)
     return $ start : middle ++ content
     
+fromTo :: Char -> Char -> GenParser Char st String
+fromTo start end = fromToDepth start end 1
+
+fromToDepth :: Char -> Char -> Int -> GenParser Char st String
+fromToDepth start end 0 = string [end]
+fromToDepth start end d = do --(char start) >> many (noneOf [end]) <* char end
+    start <- char start
+    middle <- many $ noneOf [start, end]
+    rest <- try (fromToDepth start end (d + 1)) <|> fromToDepth end start (d - 1)
+    return $ start : middle ++ rest
 
 parseConstructor = do
     vis <- parseVisibility <* trim
-    many alphaNum
+    many1 alphaNum
     char '('
     parameters <- parseParameters <* trim
     ctorCall <- parseCtorCall <* trim
     content <- parseContent <* trim
     return $ C.Constructor vis parameters ctorCall content
 
-parseMethod = (try parseConcreteMethod <|> try parseOverrideMethod <|> parseAbstractMethod) <* trim
+parseDesctructor = do
+    char '~'
+    many1 legalName
+    char '('
+    parameters <- parseParameters <* trim
+    content <- parseContent <* trim
+    return $ C.Desctructor parameters content
+
+
+parseMethod = (try parseConcreteMethod <|> try parseOverrideMethod <|> try parseAbstractMethod <|> try parseInterfaceMethod <|> parseExternal) <* trim
 
 parseConcreteMethod = do
     attrs <- parseAttributes <* trim
@@ -173,6 +201,26 @@ parseAbstractMethod = do
     constraints <- parseConstraints <* trim
     return $ C.Method $ C.Abstract (C.MethodSignature vis static returnType name parameters constraints attrs)
 
+parseInterfaceMethod = do
+    attrs <- parseAttributes <* trim
+    vis <- parseVisibility <* trim
+    returnType <- parseDatatype <* trim
+    name <- parseMethodName <* trim
+    parameters <- char '(' >> parseParameters <* string ";" <* trim
+    constraints <- parseConstraints <* trim
+    return $ C.Method $ C.Interface (C.MethodSignature vis C.NonStatic returnType name parameters constraints attrs)
+
+parseExternal = do
+    attrs <- parseAttributes <* trim
+    vis <- parseVisibility <* trim
+    static <- parseStatic <* trim
+    string "extern" <* trim
+    returnType <- parseDatatype <* trim
+    name <- parseMethodName <* trim
+    parameters <- char '(' >> parseParameters <* string ";" <* trim
+    constraints <- parseConstraints <* trim
+    return $ C.Method $ C.External (C.MethodSignature vis C.NonStatic returnType name parameters constraints attrs)
+
 parseMethodName = try parseGenericMethodName <|> parseSimpleMethodName
 
 parseGenericMethodName = do 
@@ -184,7 +232,7 @@ parseSimpleMethodName = do
     name <- many1 legalName
     return $ C.MethodName name
 
-parseMembers = (try (char '}') >> return []) <|> manyTill ((try parseMethod <|> try parseConstructor <|> try parseProperty) <* trim) (char '}')
+parseMembers = (try (char '}') >> return []) <|> manyTill ((try parseMethod <|> try parseConstructor <|> try parseDesctructor <|> try parseProperty) <* trim) (char '}')
 
 parseDatatype :: GenParser Char st C.Datatype
 parseDatatype = try parseList <|> try parseArray <|> try parseGenericDatatype <|> parseSingle
@@ -221,9 +269,6 @@ exists rule = (try rule >> return True) <|> return False
 trim :: GenParser Char st String
 trim = many $ oneOf " \n\t"
 
-fromTo :: Char -> Char -> GenParser Char st String
-fromTo start end = (char start) >> many (noneOf [end]) <* char end
-
 legalName = alphaNum <|> char '_'
 
 parseType = do
@@ -240,12 +285,13 @@ parseClass us ns = do
     safe <- parseSafe <* trim
     static <- parseStatic <* trim
     abstract <- exists parseAbstract <* trim
-    className <- (try (string "class") <|> string "interface") >> trim >> parseClassName <* trim
+    isInterface <- ((try (string "class") >> return False) <|> (try (string "interface") >> return True)) <* trim
+    className <- parseClassName <* trim
     baseClasses <- try parseBaseClasses <* trim
     constraints <- try (parseConstraints <* trim) <|> return ""
     char '{' <* trim
     members <- parseMembers
-    return $ C.Class us ns visibility safe abstract className baseClasses constraints members attrs
+    return $ C.Class us ns visibility safe abstract isInterface className baseClasses constraints members attrs
 
 parseEnum us ns = do
     attrs <- parseAttributes <* trim

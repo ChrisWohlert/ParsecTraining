@@ -83,3 +83,31 @@ data Type = Class { class_usings :: [String]
                  , enum_attributes :: [Attribute]
                  }
             deriving (Show, Eq)
+
+class HasDatatypes a where
+     getDatatypes :: a -> [Datatype]
+
+instance HasDatatypes Type where
+     getDatatypes (Class _ _ _ _ _ _ _ _ _ members _) = concat $ map getDatatypes members
+     getDatatypes _ = []
+
+instance HasDatatypes Parameter where
+     getDatatypes (Parameter _ _ d _ _ _) = [d]
+
+instance HasDatatypes MethodSignature where
+     getDatatypes (MethodSignature _ _ _ returnType _ parameters _ _) =  returnType : (concat $ map getDatatypes parameters)
+
+instance HasDatatypes Method where
+     getDatatypes (Concrete methodSignature _) =  getDatatypes methodSignature
+     getDatatypes (Abstract methodSignature) =  getDatatypes methodSignature
+     getDatatypes (Interface methodSignature) =  getDatatypes methodSignature
+     getDatatypes (External methodSignature) =  getDatatypes methodSignature
+     getDatatypes (ArrowFunction methodSignature _) =  getDatatypes methodSignature
+     getDatatypes (OperatorOverload _ _ _ parameters _ _ _) = concat $ map getDatatypes parameters
+
+instance HasDatatypes Member where
+     getDatatypes (Property _ d _ _ _ _ _ _ _) = [d]
+     getDatatypes (Constructor _ parameters _ _) = concat $ map getDatatypes parameters
+     getDatatypes (StaticConstructor parameters _) = concat $ map getDatatypes parameters
+     getDatatypes (Desctructor parameters _) = concat $ map getDatatypes parameters
+     getDatatypes (Method method) = getDatatypes method

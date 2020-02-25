@@ -24,6 +24,7 @@ import System.IO
 import System.Directory
 import Control.Monad
 import System.Exit
+import Data.Either
 
 run_parse :: (GenParser Char () a) -> String -> String -> Either ParseError a
 run_parse rule input source = parse rule source input
@@ -402,8 +403,22 @@ test :: IO ()
 test = do
     files <- getFilesFromDir "D:/haskell/ParsecTraining"
     types <- mapM getContent files
-    mapM (print) $ take 1 $ drop 2 types
+    let dependencies = mapDependencies $ rights types
+    print $ take 1 $ map (\(t, ts) -> (C.class_name t, map C.class_namespace ts)) dependencies
     print "Done."
+
+mapDependencies :: [C.Type] -> [(C.Type, [C.Type])]
+mapDependencies types = map mapDependenciesForType types
+    where
+        mapDependenciesForType t = 
+            let datatypes = C.getDatatypes t
+            in (t, filter (isDependency datatypes) types)
+        isDependency datatypes (C.Class _ _ _ _ _ _ (C.ClassName name) _ _ _ _) = any (hasName name) datatypes
+        isDependency datatypes (C.Class _ _ _ _ _ _ (C.GenericClassName name _) _ _ _ _) = any (hasName name) datatypes
+        isDependency datatypes _ = False
+        hasName name (C.Single n) = name == n
+        hasName name (C.List d) = hasName name d
+        hasName name (C.Generic d ds) = hasName name d || any (hasName name) ds
 
 getContent :: String -> IO (Either ParseError C.Type)
 getContent file = do

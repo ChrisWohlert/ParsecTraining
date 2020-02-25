@@ -6,14 +6,16 @@ module Lib
     , test
     , getFilesFromDir
     , dirTest
-    , parseAbstractMethod
     , parseMethod
     , parseParameters
     , parseMembers
     , parseContent
     , parseConcreteMethod
+    , parseAbstractMethod
     , parseConstructor
     , parseEnum
+    , parseOperatorOverload
+    , parseMember
     ) where
         
 import Text.ParserCombinators.Parsec
@@ -66,12 +68,13 @@ parseProperty = do
     attrs <- parseAttributes <* trim
     vis <- parseVisibility <* trim
     static <- parseStatic <* trim
+    modifier <- parseModifier <* trim
     readonly <- parseReadonly <* trim
     datatype <- parseDatatype <* trim
     names <- parsePropertyName <* trim
     getset <- parseGetSet <* trim
     value <- (try (char '=' >> try space >> manyTill anyChar (char ';')) <|> return "") <* trim
-    return $ C.Property datatype names getset value vis readonly static attrs
+    return $ C.Property modifier datatype names getset value vis readonly static attrs
 
 parseStatic = (try (string "static") >> return C.Static) <|> return C.NonStatic
 
@@ -79,26 +82,26 @@ parseReadonly = (try (string "readonly") >> return C.Readonly) <|> return C.Muta
 
 parseSafe = (try (string "unsafe") >> return C.Unsafe) <|> return C.Safe
 
+parseModifier = (try (string "override") >> return (Just C.Override)) <|> (try (string "virtual") >> return (Just C.Virtual)) <|> return Nothing
+
 parseGetSet = try parseNormalGetSet <|> try parseArrowGet <|> return Nothing
 
 parseNormalGetSet = do
     getset <- fromTo '{' '}'
     return $ Just $ C.GetSet getset
-
+    
 parseArrowGet = do
     string "=>" <* trim
     get <- manyTill anyChar (char ';')
     return $ Just $ C.ArrowGet get
 
-parseAttributes = many $ fromTo '[' ']'
+parseAttributes = many $ fromTo '[' ']' <* trim
 
 parseCtorCall = try (do 
     char ':' >> trim
     name <- many1 letter <* trim
-    char '('
-    names <- sepBy (many (noneOf ",)")) (string ", ")
-    char ')'
-    return $ Just (C.CtorCall name names)) <|> return Nothing
+    content <- fromTo '(' ')'
+    return $ Just (C.CtorCall name content)) <|> return Nothing
 
 parsePropertyName = try parseSinglePropertyName <|> parseMultiPropertyName
 
@@ -119,7 +122,7 @@ parseParameters = do
         datatype <- parseDatatype <* trim
         name <- many1 alphaNum <* trim
         value <- try (char '=' >> trim >> many (noneOf ",)")) <|> return ""
-        try (string ", ") <|> return ""
+        try (string ",") <* trim <|> return ""
         return $ C.Parameter ref params datatype name (if value /= [] then Just value else Nothing) extension) (char ')')
     return parameters
 
@@ -131,20 +134,20 @@ parseContent = parseContentStart '{' 1
 
 parseContentStart _ 0 = string "}"
 parseContentStart c d = do
-    start <- char c
-    middle <- many $ noneOf "{}"
-    content <- try (parseContentStart '{' (d + 1)) <|> parseContentStart '}' (d - 1)
-    return $ start : middle ++ content
+    content <- fromTo '{' '}'
+    return $ "{" ++ content ++ "}"
     
 fromTo :: Char -> Char -> GenParser Char st String
-fromTo start end = fromToDepth start end 1
+fromTo start end = do 
+    (_:content) <- fromToDepth start start end 1
+    return $ init content
 
-fromToDepth :: Char -> Char -> Int -> GenParser Char st String
-fromToDepth start end 0 = string [end]
-fromToDepth start end d = do --(char start) >> many (noneOf [end]) <* char end
-    start <- char start
-    middle <- many $ noneOf [start, end]
-    rest <- try (fromToDepth start end (d + 1)) <|> fromToDepth end start (d - 1)
+fromToDepth :: Char -> Char -> Char -> Int -> GenParser Char st String
+fromToDepth current start end 0 = string [end]
+fromToDepth current s e d = do
+    start <- char current
+    middle <- many $ noneOf [s, e]
+    rest <- try (fromToDepth s s e (d + 1)) <|> fromToDepth e s e (d - 1)
     return $ start : middle ++ rest
 
 parseConstructor = do
@@ -156,39 +159,36 @@ parseConstructor = do
     content <- parseContent <* trim
     return $ C.Constructor vis parameters ctorCall content
 
+parseStaticConstructor = do
+    string "static" <* trim
+    many1 alphaNum <* trim
+    char '('
+    parameters <- parseParameters <* trim
+    content <- parseContent <* trim
+    return $ C.StaticConstructor parameters content
+
 parseDesctructor = do
-    char '~'
-    many1 legalName
+    char '~' <* trim
+    many1 legalName <* trim
     char '('
     parameters <- parseParameters <* trim
     content <- parseContent <* trim
     return $ C.Desctructor parameters content
 
 
-parseMethod = (try parseConcreteMethod <|> try parseOverrideMethod <|> try parseAbstractMethod <|> try parseInterfaceMethod <|> parseExternal) <* trim
+parseMethod = (try parseConcreteMethod <|> try parseAbstractMethod <|> try parseInterfaceMethod <|> try parseOperatorOverload <|> parseExternal) <* trim
 
 parseConcreteMethod = do
     attrs <- parseAttributes <* trim
     vis <- parseVisibility <* trim
     static <- parseStatic <* trim
+    modifier <- parseModifier <* trim
     returnType <- parseDatatype <* trim
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* trim
     constraints <- parseConstraints <* trim
     content <- parseContent <* trim
-    return $ C.Method $ C.Concrete (C.MethodSignature vis static returnType name parameters constraints attrs) content
-    
-parseOverrideMethod = do
-    attrs <- parseAttributes <* trim
-    vis <- parseVisibility <* trim
-    static <- parseStatic <* trim
-    override <- parseOverride <* trim
-    returnType <- parseDatatype <* trim
-    name <- parseMethodName <* trim
-    parameters <- char '(' >> parseParameters <* trim
-    constraints <- parseConstraints <* trim
-    content <- parseContent <* trim
-    return $ C.Method $ C.Override (C.MethodSignature vis static returnType name parameters constraints attrs) content
+    return $ C.Method $ C.Concrete (C.MethodSignature vis static modifier returnType name parameters constraints attrs) content
 
 parseAbstractMethod = do
     attrs <- parseAttributes <* trim
@@ -199,7 +199,7 @@ parseAbstractMethod = do
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* string ";" <* trim
     constraints <- parseConstraints <* trim
-    return $ C.Method $ C.Abstract (C.MethodSignature vis static returnType name parameters constraints attrs)
+    return $ C.Method $ C.Abstract (C.MethodSignature vis static Nothing returnType name parameters constraints attrs)
 
 parseInterfaceMethod = do
     attrs <- parseAttributes <* trim
@@ -208,7 +208,7 @@ parseInterfaceMethod = do
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* string ";" <* trim
     constraints <- parseConstraints <* trim
-    return $ C.Method $ C.Interface (C.MethodSignature vis C.NonStatic returnType name parameters constraints attrs)
+    return $ C.Method $ C.Interface (C.MethodSignature vis C.NonStatic Nothing returnType name parameters constraints attrs)
 
 parseExternal = do
     attrs <- parseAttributes <* trim
@@ -219,7 +219,67 @@ parseExternal = do
     name <- parseMethodName <* trim
     parameters <- char '(' >> parseParameters <* string ";" <* trim
     constraints <- parseConstraints <* trim
-    return $ C.Method $ C.External (C.MethodSignature vis C.NonStatic returnType name parameters constraints attrs)
+    return $ C.Method $ C.External (C.MethodSignature vis C.NonStatic Nothing returnType name parameters constraints attrs)
+
+parseArrowFunction = do
+    attrs <- parseAttributes <* trim
+    vis <- parseVisibility <* trim
+    static <- parseStatic <* trim
+    modifier <- parseModifier <* trim
+    returnType <- parseDatatype <* trim
+    name <- parseMethodName <* trim
+    parameters <- char '(' >> parseParameters <* trim
+    constraints <- parseConstraints <* trim
+    string "=>" <* trim
+    content <- manyTill anyChar (char ';')
+    return $ C.Method $ C.ArrowFunction (C.MethodSignature vis static modifier returnType name parameters constraints attrs) content
+
+parseOperatorOverload = try parseImplicit <|> try parseExplicit <|> parseUnary
+
+parseImplicit = do
+    attrs <- parseAttributes <* trim
+    vis <- parseVisibility <* trim
+    string "static" <* trim
+    string "implicit operator" <* trim
+    name <- parseMethodName <* trim
+    parameters <- char '(' >> parseParameters <* trim
+    constraints <- parseConstraints <* trim
+    content <- parseContent <* trim
+    return $ C.Method $ C.OperatorOverload C.Implicit vis name parameters constraints attrs content
+
+parseExplicit = do
+    attrs <- parseAttributes <* trim
+    vis <- parseVisibility <* trim
+    string "static" <* trim
+    string "explicit operator" <* trim
+    name <- parseMethodName <* trim
+    parameters <- char '(' >> parseParameters <* trim
+    constraints <- parseConstraints <* trim
+    content <- parseContent <* trim
+    return $ C.Method $ C.OperatorOverload C.Explicit vis name parameters constraints attrs content
+
+parseUnary = do
+    attrs <- parseAttributes <* trim
+    vis <- parseVisibility <* trim
+    string "static" <* trim
+    returnType <- parseDatatype <* trim
+    string "operator" <* trim
+    operator <- manyTill anyChar $ char '('
+    parameters <- parseParameters <* trim
+    constraints <- parseConstraints <* trim
+    content <- parseContent <* trim
+    return $ C.Method $ C.OperatorOverload (C.Unary returnType) vis (C.MethodName operator) parameters constraints attrs content
+
+parseEvent = do
+    vis <- parseVisibility <* trim
+    string "event" <* trim
+    datatype <- parseDatatype <* trim
+    name <- manyTill anyChar $ char ';'
+    return $ C.Event vis datatype name
+
+parseClassAsMember = do
+    c <- parseClass [] []
+    return $ C.InnerType c
 
 parseMethodName = try parseGenericMethodName <|> parseSimpleMethodName
 
@@ -232,7 +292,28 @@ parseSimpleMethodName = do
     name <- many1 legalName
     return $ C.MethodName name
 
-parseMembers = (try (char '}') >> return []) <|> manyTill ((try parseMethod <|> try parseConstructor <|> try parseDesctructor <|> try parseProperty) <* trim) (char '}')
+parseRegion = try parseStartRegion <|> parseEndRegion
+
+parseStartRegion = do 
+    string "#region" <* trim
+    name <- manyTill anyChar newline
+    return $ C.Region (C.StartRegion name)
+
+parseEndRegion = string "#endregion" <* trim >> return (C.Region C.EndRegion)
+
+parseMembers = (try (char '}') >> return []) <|> manyTill parseMember (char '}')
+
+parseMember = (
+    (try parseClassAsMember
+    <|> try parseMethod 
+    <|> try parseConstructor 
+    <|> try parseStaticConstructor 
+    <|> try parseDesctructor 
+    <|> try parseArrowFunction
+    <|> try parseEvent
+    <|> try parseProperty
+    <|> try parseRegion
+    ) <* trim)
 
 parseDatatype :: GenParser Char st C.Datatype
 parseDatatype = try parseList <|> try parseArray <|> try parseGenericDatatype <|> parseSingle
@@ -256,10 +337,7 @@ parseGenericDatatype = do
     generic <- char '<' >> sepBy parseDatatype (string ", ") <* char '>'
     return $ C.Generic datatype generic
 
-
 parseAbstract = string "abstract"
-
-parseOverride = string "override"
 
 parseConstraints = (try (string "where") >> trim >> many1 (noneOf "\n{")) <|> return ""
 

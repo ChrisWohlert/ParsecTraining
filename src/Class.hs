@@ -9,9 +9,13 @@ type Constraints = String
 type Value = String
 type Extension = Bool
 
+data Region = StartRegion Name | EndRegion deriving (Show, Eq)
+
 data GetSet = GetSet String | ArrowGet String deriving (Show, Eq)
 
 data Datatype = Single String | Generic Datatype [Datatype] | List Datatype deriving (Show, Eq)
+
+data Modifier = Override | Virtual deriving (Show, Eq)
 
 type BaseClass = Datatype
 
@@ -31,22 +35,30 @@ data Params = Params | NoParams deriving (Show, Eq)
 
 data Parameter = Parameter Ref Params Datatype Name (Maybe Value) Extension deriving (Show, Eq)
 
-data MethodSignature = MethodSignature Visibility Static ReturnType MethodName [Parameter] Constraints [Attribute] deriving (Show, Eq)
+data OperatorOverload = Implicit | Explicit | Unary ReturnType deriving (Show, Eq)
+
+data MethodSignature = MethodSignature Visibility Static (Maybe Modifier) ReturnType MethodName [Parameter] Constraints [Attribute] deriving (Show, Eq)
 
 data Method = Concrete MethodSignature Content 
             | Abstract MethodSignature
-            | Override MethodSignature Content
             | Interface MethodSignature
-            | External MethodSignature deriving (Show, Eq)
+            | External MethodSignature
+            | ArrowFunction MethodSignature Content
+            | OperatorOverload OperatorOverload Visibility MethodName [Parameter] Constraints [Attribute] Content 
+            deriving (Show, Eq)
 
-data CtorCall = CtorCall String [String] deriving (Show, Eq)
+data CtorCall = CtorCall String Content deriving (Show, Eq)
 
 data PropertyName = PropertyName Name | MultiName [Name] deriving (Show, Eq)
 
-data Member = Property Datatype PropertyName (Maybe GetSet) Value Visibility Readonly Static [Attribute]
+data Member = Property (Maybe Modifier) Datatype PropertyName (Maybe GetSet) Value Visibility Readonly Static [Attribute]
             | Constructor Visibility [Parameter] (Maybe CtorCall) Content
+            | StaticConstructor [Parameter] Content
             | Desctructor [Parameter] Content
             | Method Method
+            | InnerType Type
+            | Event Visibility Datatype Name
+            | Region Region
             deriving (Show, Eq)
 
 data Safe = Safe | Unsafe deriving (Show, Eq)

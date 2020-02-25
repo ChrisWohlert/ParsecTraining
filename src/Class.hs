@@ -78,8 +78,8 @@ data Type = Class { class_usings :: [String]
             Enum { enum_usings :: [String]
                  , enum_namespace :: String
                  , enum_visibility :: Visibility
-                 , enum_name :: String
+                 , enum_name :: Name
                  , elements :: [String]
-                 , class_attributes :: [Attribute]
+                 , enum_attributes :: [Attribute]
                  }
             deriving (Show, Eq)

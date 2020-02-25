@@ -401,20 +401,16 @@ run_parseType contents source = case run_parse removeComments contents source of
 test :: IO ()
 test = do
     files <- getFilesFromDir "D:/haskell/ParsecTraining"
-    mapM getContent files
+    types <- mapM getContent files
+    mapM (print) $ take 1 $ drop 2 types
     print "Done."
 
-getContent :: String -> IO ()
+getContent :: String -> IO (Either ParseError C.Type)
 getContent file = do
     handle <- openFile file ReadMode  
     contents <- hGetContents handle
-    case run_parseType contents file of
-        Left err -> do
-            print err
-            exitSuccess
-        Right c -> do 
-            print "."
-    hClose handle
+    let parsed = run_parseType contents file
+    return parsed
 
 getFilesFromDir :: FilePath -> IO [String]
 getFilesFromDir p = do

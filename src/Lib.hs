@@ -328,7 +328,7 @@ parseList = do
     return $ C.List datatype
 
 parseArray = do
-    datatype <- parseSingle <* trim
+    datatype <- (try parseList <|> try parseGenericDatatype <|> parseSingle) <* trim
     char '[' >> char ']'
     return $ C.List datatype
 
@@ -400,7 +400,7 @@ run_parseType contents source = case run_parse removeComments contents source of
 
 test :: IO ()
 test = do
-    files <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
+    files <- getFilesFromDir "D:/haskell/ParsecTraining"
     mapM getContent files
     print "Done."
 

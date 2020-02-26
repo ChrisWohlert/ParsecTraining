@@ -38,6 +38,7 @@ executables:
     dependencies:
     - ParsecTraining
     - parsec
+    - gloss
 
 tests:
   ParsecTraining-test:

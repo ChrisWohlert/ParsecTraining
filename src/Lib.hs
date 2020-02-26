@@ -25,6 +25,7 @@ import System.Directory
 import Control.Monad
 import System.Exit
 import Data.Either
+import Data.List
 
 run_parse :: (GenParser Char () a) -> String -> String -> Either ParseError a
 run_parse rule input source = parse rule source input
@@ -401,10 +402,10 @@ run_parseType contents source = case run_parse removeComments contents source of
 
 test :: IO ()
 test = do
-    files <- getFilesFromDir "D:/haskell/ParsecTraining"
+    files <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
     types <- mapM getContent files
     let dependencies = mapDependencies $ rights types
-    print $ take 1 $ map (\(t, ts) -> (C.class_name t, map C.class_namespace ts)) dependencies
+    print $ take 5 $ map (\(t, ts) -> (C.class_name t, map C.class_name ts)) dependencies
     print "Done."
 
 mapDependencies :: [C.Type] -> [(C.Type, [C.Type])]
@@ -412,13 +413,13 @@ mapDependencies types = map mapDependenciesForType types
     where
         mapDependenciesForType t = 
             let datatypes = C.getDatatypes t
-            in (t, filter (isDependency datatypes) types)
-        isDependency datatypes (C.Class _ _ _ _ _ _ (C.ClassName name) _ _ _ _) = any (hasName name) datatypes
-        isDependency datatypes (C.Class _ _ _ _ _ _ (C.GenericClassName name _) _ _ _ _) = any (hasName name) datatypes
-        isDependency datatypes _ = False
+            in (t, filter (isDependency datatypes (C.class_usings t) (C.class_namespace t)) types)
+        isDependency datatypes usings namespace (C.Class _ ns _ _ _ _ (C.ClassName name) _ _ _ _) = (ns `isInfixOf` namespace || any (ns `isInfixOf`) usings) && any (hasName name) datatypes
+        isDependency datatypes usings namespace (C.Class _ ns _ _ _ _ (C.GenericClassName name _) _ _ _ _) = (ns `isInfixOf` namespace || any (ns `isInfixOf`) usings) && any (hasName name) datatypes
+        isDependency datatypes usings namespace _ = False
         hasName name (C.Single n) = name == n
         hasName name (C.List d) = hasName name d
-        hasName name (C.Generic d ds) = hasName name d || any (hasName name) ds
+        hasName name (C.Generic d ds) = hasName name d || any (hasName name) ds -- Something is missing. If you depend on Volume<T>, it gives you deps to both Volume and Volume<T>
 
 getContent :: String -> IO (Either ParseError C.Type)
 getContent file = do

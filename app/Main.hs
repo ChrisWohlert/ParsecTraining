@@ -2,12 +2,16 @@ module Main (main) where
 
 import Lib
 import System.IO
+import Graphics.Gloss
+
+window :: Display
+window = InWindow "Depsgraph" (600, 400) (10, 10)
+
+background :: Color
+background = white
+
+drawing :: Picture
+drawing = circle 80
 
 main :: IO ()
-main = do
-    handle <- openFile "test-data/SomeClass.cs" ReadMode  
-    contents <- hGetContents handle
-    case run_parseType contents "SomeClass" of
-        Left err -> print err
-        Right c -> print $ contents ++ (show c)
-    hClose handle 
+main = display window background drawing

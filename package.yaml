@@ -39,6 +39,7 @@ executables:
     - ParsecTraining
     - parsec
     - gloss
+    - gloss-export
 
 tests:
   ParsecTraining-test:

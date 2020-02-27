@@ -2,16 +2,20 @@ module Main (main) where
 
 import Lib
 import System.IO
-import Graphics.Gloss
-
-window :: Display
-window = InWindow "Depsgraph" (600, 400) (10, 10)
+import qualified Graphics.UI.GLUT as GLUT
+import Graphics.Gloss.Interface.IO.Game
+import Graphics.Gloss.Export.PNG
+import Drawing
+import Class
 
 background :: Color
 background = white
 
-drawing :: Picture
-drawing = circle 80
+render = pure . draw
 
 main :: IO ()
-main = display window background drawing
+main = do
+    (_, _) <- GLUT.getArgsAndInitialize
+    types <- parseFiles "C:/Users/CWO/source/github/ParsecTraining"
+    picture <- render (Solution types)
+    exportPictureToPNG (4000, 4000) background "C:\\Users\\CWO\\Desktop\\pic.png" picture

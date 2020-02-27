@@ -3,7 +3,7 @@ module Lib
     , run_parseType
     , parseClass
     , parseProperty
-    , test
+    , parseFiles
     , getFilesFromDir
     , dirTest
     , parseMethod
@@ -400,13 +400,12 @@ run_parseType contents source = case run_parse removeComments contents source of
     Right text -> run_parse parseType text source
     Left err -> Left err
 
-test :: IO ()
-test = do
-    files <- getFilesFromDir "C:/Users/CWO/source/github/ParsecTraining"
+parseFiles :: String -> IO ([C.Type])
+parseFiles dir = do
+    files <- getFilesFromDir dir
     types <- mapM getContent files
     let dependencies = mapDependencies $ rights types
-    print $ take 5 $ map (\(t, ts) -> (C.class_name t, map C.class_name ts)) dependencies
-    print "Done."
+    return $ rights types
 
 mapDependencies :: [C.Type] -> [(C.Type, [C.Type])]
 mapDependencies types = map mapDependenciesForType types

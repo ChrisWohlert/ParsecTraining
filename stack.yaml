@@ -39,7 +39,18 @@ packages:
 # - git: https://github.com/commercialhaskell/stack.git
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
-extra-deps: [ "paths-0.2.0.0" ]
+extra-deps: [ paths-0.2.0.0
+            , gloss-export-0.1.0.2
+            , GLUT-2.7.0.14
+            , JuicyPixels-3.3.1
+            , OpenGLRaw-3.3.1.0
+            , gloss-rendering-1.13.0.2
+            , vector-0.12.0.1
+            , containers-0.5.11.0
+            , binary-0.8.8.0
+            , StateVar-1.1.1.1
+            , fixed-0.2.1.1
+            , text-1.2.4.0 ]
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

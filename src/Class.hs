@@ -84,6 +84,8 @@ data Type = Class { class_usings :: [String]
                  }
             deriving (Show, Eq)
 
+data Solution = Solution [Type]
+
 class HasDatatypes a where
      getDatatypes :: a -> [Datatype]
 
